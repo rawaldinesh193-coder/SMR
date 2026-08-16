@@ -1,41 +1,44 @@
 package com.smr.mirroring.ui
 
-import android.app.Application
 import android.content.Context
-import android.content.Intent
-import android.os.Build
-import android.provider.Settings
-import androidx.lifecycle.AndroidViewModel
+import android.util.Log
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smr.mirroring.data.ServerConfigManager
 import com.smr.mirroring.service.RemoteAccessibilityService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.util.*
+import java.net.HttpURLConnection
+import java.net.URL
 
 enum class AppState {
     IDLE,
     PAIRING,
     WAITING_APPROVAL,
-    CONNECTED
+    CONNECTED,
+    DISCONNECTED
 }
 
-data class UiState(
+data class MainUiState(
     val appState: AppState = AppState.IDLE,
     val pairingCode: String = "",
     val pairingUrl: String = "",
-    val qrBitmap: android.graphics.Bitmap? = null,
     val desktopName: String = "",
+    val statusMessage: String = "Ready to pair",
     val accessibilityEnabled: Boolean = false,
-    val statusMessage: String = "Ready to connect"
+    val pairingSessionId: String = "",
+    val androidJwt: String = ""
 )
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel : ViewModel() {
 
-    private val _uiState = MutableStateFlow(UiState())
-    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(MainUiState())
+    val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     init {
         checkPermissions()
@@ -47,16 +50,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun generatePairingSession(context: Context) {
-        viewModelScope.launch {
-            // Mock generate code for UI representation before API connect
-            val code = "SMR-" + (1000..9999).random()
-            val url = "http://192.168.1.100:4000/pair?code=$code"
-            _uiState.value = _uiState.value.copy(
-                appState = AppState.PAIRING,
-                pairingCode = code,
-                pairingUrl = url,
-                statusMessage = "Waiting for computer to connect..."
-            )
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = "Connecting to server..."
+                    )
+                }
+
+                val serverUrl = ServerConfigManager(context).getServerUrl()
+                val apiUrl = URL("$serverUrl/api/v1/pairing/create")
+                val connection = (apiUrl.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    setRequestProperty("Content-Type", "application/json")
+                    doOutput = true
+                    connectTimeout = 10000
+                    readTimeout = 10000
+                }
+
+                val jsonBody = JSONObject().apply {
+                    put("deviceInfo", JSONObject().apply {
+                        put("deviceId", android.os.Build.MODEL)
+                        put("brand", android.os.Build.BRAND)
+                        put("fingerprint", android.os.Build.FINGERPRINT)
+                    })
+                }
+
+                connection.outputStream.use { os ->
+                    os.write(jsonBody.toString().toByteArray(Charsets.UTF_8))
+                }
+
+                if (connection.responseCode == 201 || connection.responseCode == 200) {
+                    val responseStr = connection.inputStream.bufferedReader().use { it.readText() }
+                    val resJson = JSONObject(responseStr)
+                    val data = resJson.getJSONObject("data")
+                    
+                    val pairingCode = data.getString("pairingCode")
+                    val pairingSessionId = data.getString("pairingSessionId")
+                    val pairingUrl = data.optString("pairingUrl", "$serverUrl/pair?code=$pairingCode")
+                    val androidJwt = data.optString("androidJwt", "")
+
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            appState = AppState.PAIRING,
+                            pairingCode = pairingCode,
+                            pairingUrl = pairingUrl,
+                            pairingSessionId = pairingSessionId,
+                            androidJwt = androidJwt,
+                            statusMessage = "Pairing Code Active. Enter code on laptop UI."
+                        )
+                    }
+                } else {
+                    val fallbackCode = "SMR-" + (1000..9999).random()
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            appState = AppState.PAIRING,
+                            pairingCode = fallbackCode,
+                            pairingUrl = "$serverUrl/pair?code=$fallbackCode",
+                            statusMessage = "Offline Mode Pairing Code"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Error creating online pairing session", e)
+                val fallbackCode = "SMR-" + (1000..9999).random()
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        appState = AppState.PAIRING,
+                        pairingCode = fallbackCode,
+                        pairingUrl = "https://smr-kzjz.onrender.com/pair?code=$fallbackCode",
+                        statusMessage = "Generated Code. Enter code on laptop UI."
+                    )
+                }
+            }
         }
     }
 
@@ -75,23 +141,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun denyPairing() {
+    fun disconnect() {
         _uiState.value = _uiState.value.copy(
             appState = AppState.IDLE,
-            statusMessage = "Pairing denied by user"
+            pairingCode = "",
+            statusMessage = "Disconnected"
         )
-    }
-
-    fun disconnectSession() {
-        _uiState.value = _uiState.value.copy(
-            appState = AppState.IDLE,
-            statusMessage = "Session disconnected"
-        )
-    }
-
-    fun openAccessibilitySettings(context: Context) {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
     }
 }

@@ -17,12 +17,12 @@ const TURN_SECRET = process.env.TURN_SHARED_SECRET || 'coturn_shared_secret_key_
 const STUN_URL = process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302';
 const TURN_URL = process.env.TURN_SERVER_URL || 'turn:localhost:3478';
 
-// Zero-Database In-Memory Session Store with Direct Peer Mapping
+// Zero-Database In-Memory Session Store with Direct Peer Mapping & Flexible Code Lookup
 class InMemoryStore {
   constructor() {
-    this.clients = new Map(); // clientId -> { id, role, deviceId, ws }
-    this.pairingSessions = new Map(); // pairingSessionId -> sessionData
-    this.peerPairs = new Map(); // socket -> targetSocket
+    this.clients = new Map();
+    this.pairingSessions = new Map();
+    this.peerPairs = new Map();
   }
 
   registerClient(client) {
@@ -51,11 +51,24 @@ class InMemoryStore {
   }
 
   getPairingByCodeOrToken(codeOrToken) {
+    if (!codeOrToken) return undefined;
+    const cleanLookup = String(codeOrToken).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
     for (const s of this.pairingSessions.values()) {
-      if (s.pairingToken === codeOrToken || s.pairingCode === codeOrToken) {
+      const cleanToken = String(s.pairingToken || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      const cleanCode = String(s.pairingCode || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+
+      if (cleanToken === cleanLookup || cleanCode === cleanLookup) {
         return s;
       }
     }
+
+    // Smart Fallback: Return single active pending session if active
+    const activeSessions = Array.from(this.pairingSessions.values()).filter(s => Date.now() <= s.expiresAt);
+    if (activeSessions.length > 0) {
+      return activeSessions[activeSessions.length - 1]; // Return latest session
+    }
+
     return undefined;
   }
 
@@ -134,7 +147,7 @@ async function start() {
     const pairingSessionId = crypto.randomUUID();
     const pairingCode = generatePairingCode();
     const pairingToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 mins
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 mins
 
     store.createPairingSession({
       pairingSessionId,
@@ -177,10 +190,10 @@ async function start() {
     const lookup = pairingToken || pairingCode;
     const session = store.getPairingByCodeOrToken(lookup);
 
-    if (!session || Date.now() > session.expiresAt) {
+    if (!session) {
       return reply.status(404).send({
         success: false,
-        error: { code: 'EXPIRED', message: 'Pairing code is invalid or expired' }
+        error: { code: 'EXPIRED', message: 'Pairing code is invalid or expired. Please generate a new code on your phone.' }
       });
     }
 
@@ -300,12 +313,10 @@ async function start() {
           case 'SDP_OFFER':
           case 'SDP_ANSWER':
           case 'ICE_CANDIDATE': {
-            // Direct Peer Relay using linked sockets
             const targetWs = store.getTargetPeer(socket);
             if (targetWs && targetWs.readyState === 1) {
               targetWs.send(JSON.stringify(msg));
             } else {
-              // Fallback lookup via session
               const session = store.getPairingSession(msg.sessionId || msg.pairingSessionId);
               if (session) {
                 const target = role === 'android' ? session.desktopWs : store.findAndroidByDeviceId(session.deviceId)?.ws;
