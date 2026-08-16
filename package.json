@@ -1,0 +1,20 @@
+{
+  "name": "smr-mirroring-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Industrial-Grade Phone Screen Mirroring & Remote Control Platform",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "node tests/transform/coordinateTransform.test.cjs",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

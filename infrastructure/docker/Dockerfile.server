@@ -1,0 +1,29 @@
+# Industrial Production Dockerfile for Render / Cloud Deployment
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy root monorepo files
+COPY package.json pnpm-workspace.yaml turbo.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps/server ./apps/server
+
+# Install pnpm and dependencies
+RUN npm install -g pnpm@9.0.0
+RUN pnpm install --no-frozen-lockfile
+RUN pnpm --filter @smr/server build
+
+# Production Runner Stage
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=4000
+
+RUN npm install -g pnpm@9.0.0
+
+COPY --from=builder /app /app
+
+EXPOSE 4000
+
+CMD ["node", "apps/server/dist/server.js"]

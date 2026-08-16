@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: smr-signaling-backend
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TURN_SHARED_SECRET
+        generateValue: true

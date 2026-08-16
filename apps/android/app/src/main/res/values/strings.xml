@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SMR Mirror</string>
+    <string name="accessibility_service_label">SMR Remote Control Engine</string>
+    <string name="accessibility_service_description">Enables remote mouse, touch, swipe, home, back, and keyboard input injection from paired desktop browser/app.</string>
+</resources>

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: smr-signaling-backend
+    env: docker
+    dockerfilePath: infrastructure/docker/Dockerfile.server
+    plan: free
+    region: oregon
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PAIRING_TOKEN_SECRET
+        generateValue: true
+      - key: TURN_SHARED_SECRET
+        generateValue: true
