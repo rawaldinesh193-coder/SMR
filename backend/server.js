@@ -20,9 +20,9 @@ const TURN_URL = process.env.TURN_SERVER_URL || 'turn:localhost:3478';
 // Zero-Database In-Memory Session Store
 class InMemoryStore {
   constructor() {
-    this.clients = new Map(); // clientId -> { id, role, deviceId, ws }
-    this.pairingSessions = new Map(); // pairingSessionId -> sessionData
-    this.connectionSessions = new Map(); // sessionId -> sessionData
+    this.clients = new Map();
+    this.pairingSessions = new Map();
+    this.connectionSessions = new Map();
   }
 
   registerClient(client) {
@@ -96,7 +96,16 @@ async function start() {
   await fastify.register(rateLimit, { max: 200, timeWindow: '1 minute' });
   await fastify.register(websocket, { options: { maxPayload: 1048576 } });
 
-  // REST API Routes
+  // Root Welcome & Health Routes
+  fastify.get('/', async () => ({
+    status: 'online',
+    service: 'SMR Mirror WebRTC Signaling Gateway',
+    version: '1.0.0',
+    mode: 'zero_database_in_memory',
+    healthCheck: '/api/v1/health',
+    websocketSignaling: '/ws/signaling'
+  }));
+
   fastify.get('/api/v1/health', async () => ({
     status: 'ok',
     service: 'SMR Standalone WebRTC Signaling Backend',
