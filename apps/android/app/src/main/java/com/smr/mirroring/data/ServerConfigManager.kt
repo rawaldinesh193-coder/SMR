@@ -17,7 +17,7 @@ class ServerConfigManager(context: Context) {
     }
 
     companion object {
-        const val DEFAULT_SERVER_URL = "http://192.168.1.100:4000"
+        const val DEFAULT_SERVER_URL = "https://smr-kzjz.onrender.com"
         const val KEY_SERVER_URL = "custom_server_url"
     }
 }

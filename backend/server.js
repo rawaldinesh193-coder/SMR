@@ -17,12 +17,12 @@ const TURN_SECRET = process.env.TURN_SHARED_SECRET || 'coturn_shared_secret_key_
 const STUN_URL = process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302';
 const TURN_URL = process.env.TURN_SERVER_URL || 'turn:localhost:3478';
 
-// Zero-Database In-Memory Session Store
+// Zero-Database In-Memory Session Store with Direct Peer Mapping
 class InMemoryStore {
   constructor() {
-    this.clients = new Map();
-    this.pairingSessions = new Map();
-    this.connectionSessions = new Map();
+    this.clients = new Map(); // clientId -> { id, role, deviceId, ws }
+    this.pairingSessions = new Map(); // pairingSessionId -> sessionData
+    this.peerPairs = new Map(); // socket -> targetSocket
   }
 
   registerClient(client) {
@@ -57,6 +57,15 @@ class InMemoryStore {
       }
     }
     return undefined;
+  }
+
+  linkPeers(ws1, ws2) {
+    this.peerPairs.set(ws1, ws2);
+    this.peerPairs.set(ws2, ws1);
+  }
+
+  getTargetPeer(ws) {
+    return this.peerPairs.get(ws);
   }
 
   removePairingSession(id) {
@@ -125,7 +134,7 @@ async function start() {
     const pairingSessionId = crypto.randomUUID();
     const pairingCode = generatePairingCode();
     const pairingToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 5 * 60 * 1000;
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 mins
 
     store.createPairingSession({
       pairingSessionId,
@@ -187,6 +196,7 @@ async function start() {
       data: {
         pairingSessionId: session.pairingSessionId,
         desktopJwt,
+        deviceId: session.deviceId,
         status: 'WAITING_FOR_APPROVAL'
       }
     });
@@ -224,7 +234,7 @@ async function start() {
     });
   });
 
-  // WebSocket Signaling Gateway
+  // WebSocket Signaling Gateway with Direct Relay
   fastify.get('/ws/signaling', { websocket: true }, (connection) => {
     const socket = connection.socket;
     let clientId = null;
@@ -247,21 +257,27 @@ async function start() {
               socket.send(JSON.stringify({ type: 'AUTH_RESPONSE', success: true }));
             } catch (err) {
               socket.send(JSON.stringify({ type: 'AUTH_RESPONSE', success: false, error: 'Unauthorized' }));
-              socket.close();
             }
             break;
           }
 
           case 'PAIR_REQUEST': {
-            const session = store.getPairingSession(msg.pairingSessionId);
+            const session = store.getPairingByCodeOrToken(msg.pairingSessionId) || store.getPairingSession(msg.pairingSessionId);
             if (!session) {
-              socket.send(JSON.stringify({ type: 'ERROR', message: 'Pairing session expired' }));
+              socket.send(JSON.stringify({ type: 'ERROR', message: 'Pairing session invalid or expired' }));
               break;
             }
             session.desktopWs = socket;
             const android = store.findAndroidByDeviceId(session.deviceId);
             if (android && android.ws.readyState === 1) {
-              android.ws.send(JSON.stringify(msg));
+              store.linkPeers(socket, android.ws);
+              android.ws.send(JSON.stringify({
+                type: 'PAIR_REQUEST',
+                pairingSessionId: session.pairingSessionId,
+                desktopName: msg.desktopName || 'Laptop Client'
+              }));
+            } else {
+              socket.send(JSON.stringify({ type: 'ERROR', message: 'Android phone is offline or not connected to signaling' }));
             }
             break;
           }
@@ -270,6 +286,7 @@ async function start() {
             const session = store.getPairingSession(msg.pairingSessionId);
             if (session && session.desktopWs && session.desktopWs.readyState === 1) {
               const turnServers = generateTurnCredentials(session.deviceId);
+              store.linkPeers(socket, session.desktopWs);
               session.desktopWs.send(JSON.stringify({
                 type: 'PAIR_APPROVAL',
                 pairingSessionId: msg.pairingSessionId,
@@ -283,11 +300,18 @@ async function start() {
           case 'SDP_OFFER':
           case 'SDP_ANSWER':
           case 'ICE_CANDIDATE': {
-            const session = store.getPairingSession(msg.sessionId || msg.pairingSessionId);
-            if (session) {
-              const targetWs = role === 'android' ? session.desktopWs : store.findAndroidByDeviceId(session.deviceId)?.ws;
-              if (targetWs && targetWs.readyState === 1) {
-                targetWs.send(JSON.stringify(msg));
+            // Direct Peer Relay using linked sockets
+            const targetWs = store.getTargetPeer(socket);
+            if (targetWs && targetWs.readyState === 1) {
+              targetWs.send(JSON.stringify(msg));
+            } else {
+              // Fallback lookup via session
+              const session = store.getPairingSession(msg.sessionId || msg.pairingSessionId);
+              if (session) {
+                const target = role === 'android' ? session.desktopWs : store.findAndroidByDeviceId(session.deviceId)?.ws;
+                if (target && target.readyState === 1) {
+                  target.send(JSON.stringify(msg));
+                }
               }
             }
             break;

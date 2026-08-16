@@ -8,6 +8,8 @@ if exist "C:\Program Files\Android\Android Studio\jbr\bin\java.exe" (
 
 call gradlew.bat assembleDebug
 if %errorlevel% equ 0 (
-    echo APK Output: app\build\outputs\apk\debug\app-debug.apk
+    echo.
+    echo Copying APK to Desktop...
+    copy "app\build\outputs\apk\debug\app-debug.apk" "C:\Users\MAYUR\Desktop\SMR-Mirror-PhoneApp.apk"
 )
 pause

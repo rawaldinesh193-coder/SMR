@@ -3,73 +3,71 @@ package com.smr.mirroring.media
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.smr.mirroring.service.RemoteAccessibilityService
 import org.json.JSONObject
-import org.webrtc.*
 
 class WebRtcMediaManager(private val context: Context) {
 
-    private var factory: PeerConnectionFactory? = null
-    private var peerConnection: PeerConnection? = null
-    private var dataChannel: DataChannel? = null
-    private var videoSource: VideoSource? = null
-    private var videoTrack: VideoTrack? = null
-    private var rootEglBase: EglBase = EglBase.create()
+    private var factory: org.webrtc.PeerConnectionFactory? = null
+    private var peerConnection: org.webrtc.PeerConnection? = null
+    private var dataChannel: org.webrtc.DataChannel? = null
+    private var videoSource: org.webrtc.VideoSource? = null
+    private var videoTrack: org.webrtc.VideoTrack? = null
+    private var rootEglBase: org.webrtc.EglBase = org.webrtc.EglBase.create()
 
     init {
         initializePeerConnectionFactory()
     }
 
     private fun initializePeerConnectionFactory() {
-        val options = PeerConnectionFactory.InitializationOptions.builder(context)
+        val options = org.webrtc.PeerConnectionFactory.InitializationOptions.builder(context)
             .setEnableInternalTracer(true)
             .createInitializationOptions()
-        PeerConnectionFactory.initialize(options)
+        org.webrtc.PeerConnectionFactory.initialize(options)
 
-        val encoderFactory = DefaultVideoEncoderFactory(rootEglBase.eglBaseContext, true, true)
-        val decoderFactory = DefaultVideoDecoderFactory(rootEglBase.eglBaseContext)
+        val encoderFactory = org.webrtc.DefaultVideoEncoderFactory(rootEglBase.eglBaseContext, true, true)
+        val decoderFactory = org.webrtc.DefaultVideoDecoderFactory(rootEglBase.eglBaseContext)
 
-        factory = PeerConnectionFactory.builder()
+        factory = org.webrtc.PeerConnectionFactory.builder()
             .setVideoEncoderFactory(encoderFactory)
             .setVideoDecoderFactory(decoderFactory)
             .createPeerConnectionFactory()
     }
 
     fun startWebRtcSession(
-        capturer: VideoCapturer,
-        iceServers: List<PeerConnection.IceServer>,
+        capturer: org.webrtc.VideoCapturer,
+        iceServers: List<org.webrtc.PeerConnection.IceServer>,
         onSdpOfferCreated: (String) -> Unit,
-        onIceCandidateGenerated: (PeerConnection.IceCandidate) -> Unit
+        onIceCandidateGenerated: (org.webrtc.IceCandidate) -> Unit
     ) {
-        val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+        val rtcConfig = org.webrtc.PeerConnection.RTCConfiguration(iceServers).apply {
+            sdpSemantics = org.webrtc.PeerConnection.SdpSemantics.UNIFIED_PLAN
+            continualGatheringPolicy = org.webrtc.PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
         }
 
-        val pcObserver = object : PeerConnection.Observer {
-            override fun onIceCandidate(candidate: IceCandidate?) {
+        val pcObserver = object : org.webrtc.PeerConnection.Observer {
+            override fun onIceCandidate(candidate: org.webrtc.IceCandidate?) {
                 candidate?.let { onIceCandidateGenerated(it) }
             }
-            override fun onDataChannel(dc: DataChannel?) {
+            override fun onDataChannel(dc: org.webrtc.DataChannel?) {
                 dc?.let { setupDataChannel(it) }
             }
-            override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
-            override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {
+            override fun onSignalingChange(state: org.webrtc.PeerConnection.SignalingState?) {}
+            override fun onIceConnectionChange(state: org.webrtc.PeerConnection.IceConnectionState?) {
                 Log.i(TAG, "WebRTC ICE Connection State: $state")
             }
             override fun onIceConnectionReceivingChange(receiving: Boolean) {}
-            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
-            override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
-            override fun onAddStream(stream: MediaStream?) {}
-            override fun onRemoveStream(stream: MediaStream?) {}
+            override fun onIceGatheringChange(state: org.webrtc.PeerConnection.IceGatheringState?) {}
+            override fun onIceCandidatesRemoved(candidates: Array<out org.webrtc.IceCandidate>?) {}
+            override fun onAddStream(stream: org.webrtc.MediaStream?) {}
+            override fun onRemoveStream(stream: org.webrtc.MediaStream?) {}
             override fun onRenegotiationNeeded() {}
-            override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {}
+            override fun onAddTrack(receiver: org.webrtc.RtpReceiver?, streams: Array<out org.webrtc.MediaStream>?) {}
         }
 
         peerConnection = factory?.createPeerConnection(rtcConfig, pcObserver)
 
         // Add Video Track from ScreenCapturer
-        val surfaceTextureHelper = SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
+        val surfaceTextureHelper = org.webrtc.SurfaceTextureHelper.create("CaptureThread", rootEglBase.eglBaseContext)
         videoSource = factory?.createVideoSource(capturer.isScreencast)
         capturer.initialize(surfaceTextureHelper, context, videoSource?.capturerObserver)
         capturer.startCapture(1080, 1920, 30) // 1080p @ 30 FPS
@@ -79,23 +77,23 @@ class WebRtcMediaManager(private val context: Context) {
         peerConnection?.addTrack(videoTrack, listOf("SMR_MEDIA_STREAM"))
 
         // Create DataChannel for Low-Latency Remote Input
-        val dcInit = DataChannel.Init().apply {
+        val dcInit = org.webrtc.DataChannel.Init().apply {
             ordered = true
         }
         dataChannel = peerConnection?.createDataChannel("input_control", dcInit)
         dataChannel?.let { setupDataChannel(it) }
 
         // Create SDP Offer
-        val mediaConstraints = MediaConstraints().apply {
-            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
-            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
+        val mediaConstraints = org.webrtc.MediaConstraints().apply {
+            mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("OfferToReceiveVideo", "false"))
+            mandatory.add(org.webrtc.MediaConstraints.KeyValuePair("OfferToReceiveAudio", "false"))
         }
 
-        peerConnection?.createOffer(object : SdpObserver {
-            override fun onCreateSuccess(sdp: SessionDescription?) {
+        peerConnection?.createOffer(object : org.webrtc.SdpObserver {
+            override fun onCreateSuccess(sdp: org.webrtc.SessionDescription?) {
                 sdp ?: return
-                peerConnection?.setLocalDescription(object : SdpObserver {
-                    override fun onCreateSuccess(p0: SessionDescription?) {}
+                peerConnection?.setLocalDescription(object : org.webrtc.SdpObserver {
+                    override fun onCreateSuccess(p0: org.webrtc.SessionDescription?) {}
                     override fun onSetSuccess() {
                         onSdpOfferCreated(sdp.description)
                     }
@@ -110,9 +108,9 @@ class WebRtcMediaManager(private val context: Context) {
     }
 
     fun setRemoteAnswer(sdpAnswer: String) {
-        val sdp = SessionDescription(SessionDescription.Type.ANSWER, sdpAnswer)
-        peerConnection?.setRemoteDescription(object : SdpObserver {
-            override fun onCreateSuccess(p0: SessionDescription?) {}
+        val sdp = org.webrtc.SessionDescription(org.webrtc.SessionDescription.Type.ANSWER, sdpAnswer)
+        peerConnection?.setRemoteDescription(object : org.webrtc.SdpObserver {
+            override fun onCreateSuccess(p0: org.webrtc.SessionDescription?) {}
             override fun onSetSuccess() { Log.i(TAG, "Remote SDP answer set successfully.") }
             override fun onCreateFailure(p0: String?) {}
             override fun onSetFailure(err: String?) { Log.e(TAG, "Failed to set remote SDP answer: $err") }
@@ -120,17 +118,17 @@ class WebRtcMediaManager(private val context: Context) {
     }
 
     fun addRemoteIceCandidate(sdpMid: String, sdpMLineIndex: Int, candidateSdp: String) {
-        val candidate = IceCandidate(sdpMid, sdpMLineIndex, candidateSdp)
+        val candidate = org.webrtc.IceCandidate(sdpMid, sdpMLineIndex, candidateSdp)
         peerConnection?.addIceCandidate(candidate)
     }
 
-    private fun setupDataChannel(dc: DataChannel) {
-        dc.registerObserver(object : DataChannel.Observer {
+    private fun setupDataChannel(dc: org.webrtc.DataChannel) {
+        dc.registerObserver(object : org.webrtc.DataChannel.Observer {
             override fun onBufferedAmountChange(previousAmount: Long) {}
             override fun onStateChange() {
                 Log.i(TAG, "DataChannel State changed: ${dc.state()}")
             }
-            override fun onMessage(buffer: DataChannel.Buffer?) {
+            override fun onMessage(buffer: org.webrtc.DataChannel.Buffer?) {
                 buffer ?: return
                 val data = ByteArray(buffer.data.remaining())
                 buffer.data.get(data)
