@@ -140,6 +140,10 @@
 
     <!-- Action Toolbar -->
     <div class="flex items-center space-x-3">
+      <button onclick="openMagicLinkModal()" class="cyber-btn px-3 py-1.5 rounded-xl text-xs font-mono-tech flex items-center space-x-1.5 border-emerald-500/50" title="Generate One-Click Magic Link">
+        <span class="text-emerald-400">🔗 MAGIC LINK</span>
+      </button>
+
       <button onclick="openServerConfigModal()" class="cyber-btn px-3 py-1.5 rounded-xl text-xs font-mono-tech flex items-center space-x-1.5" title="Render Server URL">
         <span id="server-url-display" class="text-emerald-400">smr-kzjz.onrender.com</span>
       </button>
@@ -164,7 +168,7 @@
       </div>
       <h2 class="text-2xl font-bold font-orbitron text-emerald-400 matrix-glow-text">PERSONAL AUTO-MIRROR</h2>
       <p class="text-xs text-slate-400 mt-2 font-mono-tech leading-relaxed">
-        Zero codes required. Click Instant Connect below to start screen mirroring & touch remote control immediately.
+        Zero codes required. Click Instant Connect below or tap your One-Click Magic Link on your phone.
       </p>
 
       <div class="w-full my-4 p-3 bg-slate-950/90 rounded-xl border border-emerald-500/30 text-left text-xs font-mono-tech flex items-center justify-between">
@@ -172,8 +176,12 @@
         <button onclick="openServerConfigModal()" class="text-emerald-400 underline text-xs">EDIT</button>
       </div>
 
-      <button onclick="instantAutoConnect()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.5)] transition transform hover:scale-[1.02]">
+      <button onclick="instantAutoConnect()" class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.5)] transition transform hover:scale-[1.02]">
         ⚡ INSTANT CONNECT (NO CODE NEEDED)
+      </button>
+
+      <button onclick="openMagicLinkModal()" class="w-full mt-2.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 font-mono-tech rounded-xl text-xs transition">
+        🔗 GENERATE ONE-CLICK MAGIC LINK FOR PHONE
       </button>
 
       <button onclick="openPairingModal()" class="mt-3 text-xs font-mono-tech text-emerald-500/80 hover:text-emerald-400 underline">
@@ -212,6 +220,26 @@
       </div>
     </div>
   </main>
+
+  <!-- One-Click Magic Link Generator Modal -->
+  <div id="magic-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+    <div class="matrix-panel rounded-3xl p-8 w-full max-w-md text-center">
+      <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xl font-bold">🔗</div>
+      <h3 class="text-xl font-bold font-orbitron text-emerald-400 mb-1">ONE-CLICK MAGIC LINK</h3>
+      <p class="text-xs text-slate-400 mb-5 font-mono-tech">Tap or open this URL on your phone to launch SMR app and start screen mirroring instantly.</p>
+      
+      <div class="w-full p-3.5 bg-slate-950 border border-emerald-500/40 rounded-2xl text-xs font-mono-tech text-emerald-400 break-all mb-4">
+        <span id="magic-link-text">https://smr-kzjz.onrender.com/connect</span>
+      </div>
+
+      <div class="flex space-x-3">
+        <button onclick="closeMagicLinkModal()" class="w-1/2 py-3 bg-slate-950 text-slate-400 rounded-xl text-xs font-mono-tech border border-slate-800">CLOSE</button>
+        <button onclick="copyMagicLink()" class="w-1/2 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)]">
+          <span id="copy-btn-label">COPY LINK</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Manual Pairing Modal -->
   <div id="pairing-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50 p-4">
@@ -262,6 +290,18 @@
     function updateServerDisplay() {
       document.getElementById('active-server-label').innerText = activeServerUrl;
       document.getElementById('server-url-input').value = activeServerUrl;
+      document.getElementById('magic-link-text').innerText = `${activeServerUrl}/connect`;
+    }
+
+    function openMagicLinkModal() { document.getElementById('magic-modal').classList.remove('hidden'); }
+    function closeMagicLinkModal() { document.getElementById('magic-modal').classList.add('hidden'); }
+
+    function copyMagicLink() {
+      const link = document.getElementById('magic-link-text').innerText;
+      navigator.clipboard.writeText(link);
+      const label = document.getElementById('copy-btn-label');
+      label.innerText = 'COPIED!';
+      setTimeout(() => { label.innerText = 'COPY LINK'; }, 2000);
     }
 
     function openServerConfigModal() { document.getElementById('server-modal').classList.remove('hidden'); }

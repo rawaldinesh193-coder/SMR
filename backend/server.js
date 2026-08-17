@@ -151,7 +151,8 @@ async function start() {
     service: 'SMR Mirror Personal WebRTC Signaling Gateway',
     version: '2.0.0',
     mode: 'personal_auto_connect',
-    websocketSignaling: '/ws/signaling'
+    websocketSignaling: '/ws/signaling',
+    connectDeepLink: '/connect'
   }));
 
   fastify.get('/api/v1/health', async () => ({
@@ -161,13 +162,42 @@ async function start() {
     timestamp: new Date().toISOString()
   }));
 
+  // Deep Link Launch Landing Page Route
+  fastify.get('/connect', async (req, reply) => {
+    reply.type('text/html').send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>SMR Cyber Mirror — One-Click Instant Connect</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-slate-950 text-slate-100 flex flex-col items-center justify-center h-screen p-6 text-center">
+        <div class="max-w-md p-8 bg-slate-900/90 border border-emerald-500/40 rounded-3xl shadow-[0_0_30px_rgba(0,255,102,0.2)]">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-2xl">⚡</div>
+          <h1 class="text-2xl font-bold text-emerald-400 mb-2">SMR Magic Connect Link</h1>
+          <p class="text-xs text-slate-400 mb-6">Tap the button below to launch SMR Mirror app and instantly start screen mirroring to your laptop.</p>
+          <a href="smrmirror://connect" class="block w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-2xl text-sm shadow-lg transition">
+            🚀 OPEN SMR APP & START MIRRORING
+          </a>
+        </div>
+        <script>
+          // Auto-trigger deep link open
+          window.location.href = "smrmirror://connect";
+        </script>
+      </body>
+      </html>
+    `);
+  });
+
   fastify.post('/api/v1/pairing/create', async (req, reply) => {
     const { deviceInfo } = req.body || {};
     const dbDeviceId = deviceInfo?.deviceId || 'personal_phone';
     const pairingSessionId = 'personal_session_' + crypto.randomUUID();
     const pairingCode = generatePairingCode();
     const pairingToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
 
     store.createPairingSession({
       pairingSessionId,
@@ -249,7 +279,6 @@ async function start() {
             store.registerClient({ id: clientId, role, deviceId, ws: socket });
             safeSend(socket, { type: 'AUTH_RESPONSE', success: true });
 
-            // Notify laptop if Android phone is already connected
             if (role === 'desktop') {
               const androidWs = store.getLatestAndroid();
               if (androidWs) {

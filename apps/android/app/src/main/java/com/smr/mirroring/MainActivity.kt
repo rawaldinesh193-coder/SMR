@@ -29,8 +29,28 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewModel.autoStartPersonalSession(this)
+        handleDeepLinkIntent(intent)
         setContent {
             SMRMirroringApp(this, viewModel)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent?) {
+        val data = intent?.data ?: return
+        val scheme = data.scheme
+        val host = data.host
+        val path = data.path
+
+        if ((scheme == "smrmirror" && host == "connect") ||
+            (scheme == "https" && host == "smr-kzjz.onrender.com" && path?.startsWith("/connect") == true)
+        ) {
+            viewModel.approvePairing(this)
         }
     }
 
@@ -94,7 +114,7 @@ fun HeaderSection() {
             color = Color(0xFF00FF66)
         )
         Text(
-            text = "Personal Instant Screen Mirroring & Touch Remote",
+            text = "Personal Instant Screen Mirroring & Deep Link Auto-Connect",
             fontSize = 12.sp,
             color = Color(0xFF10B981)
         )
@@ -127,7 +147,7 @@ fun IdleContent(viewModel: MainViewModel, uiState: UiState) {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Open laptop UI at https://smr-kzjz.onrender.com and tap Instant Connect to mirror screen without codes.",
+            text = "Open laptop UI or tap your generated magic link (https://smr-kzjz.onrender.com/connect) to start mirroring instantly.",
             fontSize = 13.sp,
             color = Color(0xFF94A3B8),
             textAlign = TextAlign.Center,
