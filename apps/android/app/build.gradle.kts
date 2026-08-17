@@ -47,6 +47,9 @@ android {
             excludes += "/META-INDEX/AL2.0"
             excludes += "/META-INDEX/LGPL2.1"
         }
+        jniLibs {
+            keepDebugSymbols += "**/libjingle_peerconnection_so.so"
+        }
     }
 }
 
