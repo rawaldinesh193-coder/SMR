@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.webrtc.PeerConnection
+import org.webrtc.ScreenCapturerAndroid
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -161,7 +162,6 @@ class MainViewModel : ViewModel() {
             desktopName = desktopName,
             statusMessage = "$desktopName is connecting..."
         )
-        // Auto approve if persistent consent is active
         if (MediaProjectionService.hasValidConsent()) {
             onScreenCaptureConsentGranted(
                 context,
@@ -200,8 +200,21 @@ class MainViewModel : ViewModel() {
             webRtcMediaManager?.close()
             webRtcMediaManager = WebRtcMediaManager(context)
 
-            val screenCapturer = MediaProjectionService.createScreenCapturer()
-                ?: org.webrtc.ScreenCapturerAndroid(data, object : android.media.projection.MediaProjection.Callback() {})
+            var screenCapturer: ScreenCapturerAndroid? = MediaProjectionService.createScreenCapturer()
+            if (screenCapturer == null) {
+                try {
+                    val clonedData = data.clone() as Intent
+                    screenCapturer = ScreenCapturerAndroid(clonedData, object : android.media.projection.MediaProjection.Callback() {})
+                } catch (e: Exception) {
+                    Log.w("MainViewModel", "Failed to instantiate ScreenCapturerAndroid directly: ${e.message}")
+                    MediaProjectionService.clearConsent()
+                    if (context is Activity) {
+                        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        context.startActivityForResult(projectionManager.createScreenCaptureIntent(), 9001)
+                    }
+                    return
+                }
+            }
 
             val iceServers = listOf(
                 PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),

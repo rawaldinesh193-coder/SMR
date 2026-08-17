@@ -116,16 +116,23 @@ class MediaProjectionService : Service() {
             return cachedResultCode == Activity.RESULT_OK && cachedResultData != null
         }
 
+        fun clearConsent() {
+            cachedResultCode = Activity.RESULT_CANCELED
+            cachedResultData = null
+        }
+
         fun createScreenCapturer(): ScreenCapturerAndroid? {
             val data = cachedResultData ?: return null
             return try {
-                ScreenCapturerAndroid(data, object : MediaProjection.Callback() {
+                val clonedData = data.clone() as Intent
+                ScreenCapturerAndroid(clonedData, object : MediaProjection.Callback() {
                     override fun onStop() {
                         Log.i(TAG, "MediaProjection session paused by system")
                     }
                 })
             } catch (e: Exception) {
-                Log.e(TAG, "Error creating ScreenCapturerAndroid", e)
+                Log.w(TAG, "Failed to create ScreenCapturerAndroid from cached data: ${e.message}")
+                clearConsent()
                 null
             }
         }
