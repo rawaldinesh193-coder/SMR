@@ -3,7 +3,6 @@ package com.smr.mirroring.ui
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.provider.Settings
 import android.util.Log
@@ -22,7 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.webrtc.PeerConnection
-import org.webrtc.ScreenCapturerAndroid
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -37,8 +35,8 @@ data class UiState(
     val appState: AppState = AppState.IDLE,
     val pairingCode: String = "",
     val pairingUrl: String = "",
-    val desktopName: String = "Personal Laptop",
-    val statusMessage: String = "Ready for Instant Connection",
+    val desktopName: String = "Laptop Console",
+    val statusMessage: String = "Ready for Connection",
     val accessibilityEnabled: Boolean = false,
     val pairingSessionId: String = "personal_session",
     val androidJwt: String = ""
@@ -101,9 +99,9 @@ class MainViewModel : ViewModel() {
                             pairingCode = pairingCode,
                             pairingSessionId = pairingSessionId,
                             androidJwt = androidJwt,
-                            statusMessage = "Personal Phone Registered. Open Laptop UI to Connect."
+                            statusMessage = "Phone Registered. Ready to stream."
                         )
-                        connectSignaling(serverUrl, androidJwt, pairingSessionId)
+                        connectSignaling(serverUrl, androidJwt, pairingSessionId, context)
                     }
                 }
             } catch (e: Exception) {
@@ -116,7 +114,7 @@ class MainViewModel : ViewModel() {
         autoStartPersonalSession(context)
     }
 
-    private fun connectSignaling(serverUrl: String, jwtToken: String, sessionId: String) {
+    private fun connectSignaling(serverUrl: String, jwtToken: String, sessionId: String, context: Context) {
         val wsProtocol = if (serverUrl.startsWith("https")) "wss:" else "ws:"
         val host = serverUrl.replace(Regex("^https?://"), "").removeSuffix("/")
         val wsUrl = "$wsProtocol//$host/ws/signaling"
@@ -127,9 +125,9 @@ class MainViewModel : ViewModel() {
                 val type = json.optString("type")
                 when (type) {
                     "PAIR_REQUEST" -> {
-                        val desktopName = json.optString("desktopName", "Personal Laptop")
+                        val desktopName = json.optString("desktopName", "Laptop Console")
                         viewModelScope.launch(Dispatchers.Main) {
-                            onPairingRequested(desktopName)
+                            onPairingRequested(desktopName, context)
                         }
                     }
                     "SDP_ANSWER" -> {
@@ -145,22 +143,35 @@ class MainViewModel : ViewModel() {
                             webRtcMediaManager?.addRemoteIceCandidate(mid, mLineIndex, sdp)
                         }
                     }
+                    "REMOTE_INPUT" -> {
+                        val payload = json.optJSONObject("payload")
+                        if (payload != null) {
+                            webRtcMediaManager?.parseAndDispatchInputEvent(payload.toString())
+                        }
+                    }
                 }
             }
             connect(jwtToken)
         }
     }
 
-    fun onPairingRequested(desktopName: String) {
+    fun onPairingRequested(desktopName: String, context: Context) {
         _uiState.value = _uiState.value.copy(
             appState = AppState.WAITING_APPROVAL,
             desktopName = desktopName,
             statusMessage = "$desktopName is connecting..."
         )
+        // Auto approve if persistent consent is active
+        if (MediaProjectionService.hasValidConsent()) {
+            onScreenCaptureConsentGranted(
+                context,
+                MediaProjectionService.cachedResultCode,
+                MediaProjectionService.cachedResultData!!
+            )
+        }
     }
 
     fun approvePairing(activity: Activity) {
-        // Reuse persistent screen capture consent if cached
         if (MediaProjectionService.hasValidConsent()) {
             Log.i("MainViewModel", "Reusing cached persistent screen capture consent token")
             onScreenCaptureConsentGranted(
@@ -186,14 +197,11 @@ class MainViewModel : ViewModel() {
                 context.startService(serviceIntent)
             }
 
-            val projectionCallback = object : MediaProjection.Callback() {
-                override fun onStop() {
-                    Log.i("MainViewModel", "MediaProjection session paused by system")
-                }
-            }
-
-            val screenCapturer = ScreenCapturerAndroid(data, projectionCallback)
+            webRtcMediaManager?.close()
             webRtcMediaManager = WebRtcMediaManager(context)
+
+            val screenCapturer = MediaProjectionService.createScreenCapturer()
+                ?: org.webrtc.ScreenCapturerAndroid(data, object : android.media.projection.MediaProjection.Callback() {})
 
             val iceServers = listOf(
                 PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -237,7 +245,7 @@ class MainViewModel : ViewModel() {
 
             _uiState.value = _uiState.value.copy(
                 appState = AppState.CONNECTED,
-                statusMessage = "Live Stream Active to ${_uiState.value.desktopName}"
+                statusMessage = "Live Stream Active"
             )
         } catch (e: Exception) {
             Log.e("MainViewModel", "Error starting WebRTC media session", e)

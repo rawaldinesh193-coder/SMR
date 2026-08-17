@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Path
 import android.os.Build
+import android.util.DisplayMetrics
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import com.smr.mirroring.transform.CoordinateTransformService
@@ -22,58 +23,61 @@ class RemoteAccessibilityService : AccessibilityService() {
     private val inputReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             intent ?: return
-            val action = intent.getStringExtra("ACTION") ?: return
-            val displayMetrics = resources.displayMetrics
-            val screen = ScreenDimensions(
-                width = displayMetrics.widthPixels,
-                height = displayMetrics.heightPixels,
-                rotation = 0
-            )
+            handleDirectInputIntent(intent, resources.displayMetrics)
+        }
+    }
 
-            when (action) {
-                "TAP", "TOUCH_DOWN", "TOUCH_MOVE", "TOUCH_UP" -> {
-                    val normX = intent.getFloatExtra("NORM_X", 0.5f)
-                    val normY = intent.getFloatExtra("NORM_Y", 0.5f)
-                    val pt = transformService.transformNormalizedToDisplay(normX, normY, screen)
+    fun handleDirectInputIntent(intent: Intent, metrics: DisplayMetrics) {
+        val action = intent.getStringExtra("ACTION") ?: return
+        val screen = ScreenDimensions(
+            width = metrics.widthPixels,
+            height = metrics.heightPixels,
+            rotation = 0
+        )
 
-                    if (action == "TAP") {
-                        performTap(pt.x, pt.y)
-                    } else {
-                        handleTouchGesture(action, pt.x, pt.y)
-                    }
-                }
-                "LONG_PRESS" -> {
-                    val normX = intent.getFloatExtra("NORM_X", 0.5f)
-                    val normY = intent.getFloatExtra("NORM_Y", 0.5f)
-                    val pt = transformService.transformNormalizedToDisplay(normX, normY, screen)
-                    performLongPress(pt.x, pt.y)
-                }
-                "SWIPE" -> {
-                    val startX = intent.getFloatExtra("START_X", 0.5f)
-                    val startY = intent.getFloatExtra("START_Y", 0.5f)
-                    val endX = intent.getFloatExtra("END_X", 0.5f)
-                    val endY = intent.getFloatExtra("END_Y", 0.5f)
-                    val duration = intent.getLongExtra("DURATION", 300L)
+        when (action) {
+            "TAP", "TOUCH_DOWN", "TOUCH_MOVE", "TOUCH_UP" -> {
+                val normX = intent.getFloatExtra("NORM_X", 0.5f)
+                val normY = intent.getFloatExtra("NORM_Y", 0.5f)
+                val pt = transformService.transformNormalizedToDisplay(normX, normY, screen)
 
-                    val p1 = transformService.transformNormalizedToDisplay(startX, startY, screen)
-                    val p2 = transformService.transformNormalizedToDisplay(endX, endY, screen)
-                    performSwipe(p1.x, p1.y, p2.x, p2.y, duration)
+                if (action == "TAP") {
+                    performTap(pt.x, pt.y)
+                } else {
+                    handleTouchGesture(action, pt.x, pt.y)
                 }
-                "GLOBAL_ACTION" -> {
-                    val actionName = intent.getStringExtra("GLOBAL_ACTION_NAME") ?: ""
-                    val globalCode = when (actionName) {
-                        "BACK" -> GLOBAL_ACTION_BACK
-                        "HOME" -> GLOBAL_ACTION_HOME
-                        "RECENTS" -> GLOBAL_ACTION_RECENTS
-                        "NOTIFICATIONS" -> GLOBAL_ACTION_NOTIFICATIONS
-                        "QUICK_SETTINGS" -> GLOBAL_ACTION_QUICK_SETTINGS
-                        "POWER_DIALOG" -> GLOBAL_ACTION_POWER_DIALOG
-                        "LOCK_SCREEN" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) GLOBAL_ACTION_LOCK_SCREEN else GLOBAL_ACTION_POWER_DIALOG
-                        "TAKE_SCREENSHOT" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) GLOBAL_ACTION_TAKE_SCREENSHOT else GLOBAL_ACTION_NOTIFICATIONS
-                        else -> intent.getIntExtra("GLOBAL_ACTION_TYPE", GLOBAL_ACTION_BACK)
-                    }
-                    performGlobalAction(globalCode)
+            }
+            "LONG_PRESS" -> {
+                val normX = intent.getFloatExtra("NORM_X", 0.5f)
+                val normY = intent.getFloatExtra("NORM_Y", 0.5f)
+                val pt = transformService.transformNormalizedToDisplay(normX, normY, screen)
+                performLongPress(pt.x, pt.y)
+            }
+            "SWIPE" -> {
+                val startX = intent.getFloatExtra("START_X", 0.5f)
+                val startY = intent.getFloatExtra("START_Y", 0.5f)
+                val endX = intent.getFloatExtra("END_X", 0.5f)
+                val endY = intent.getFloatExtra("END_Y", 0.5f)
+                val duration = intent.getLongExtra("DURATION", 300L)
+
+                val p1 = transformService.transformNormalizedToDisplay(startX, startY, screen)
+                val p2 = transformService.transformNormalizedToDisplay(endX, endY, screen)
+                performSwipe(p1.x, p1.y, p2.x, p2.y, duration)
+            }
+            "GLOBAL_ACTION" -> {
+                val actionName = intent.getStringExtra("GLOBAL_ACTION_NAME") ?: ""
+                val globalCode = when (actionName) {
+                    "BACK" -> GLOBAL_ACTION_BACK
+                    "HOME" -> GLOBAL_ACTION_HOME
+                    "RECENTS" -> GLOBAL_ACTION_RECENTS
+                    "NOTIFICATIONS" -> GLOBAL_ACTION_NOTIFICATIONS
+                    "QUICK_SETTINGS" -> GLOBAL_ACTION_QUICK_SETTINGS
+                    "POWER_DIALOG" -> GLOBAL_ACTION_POWER_DIALOG
+                    "LOCK_SCREEN" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) GLOBAL_ACTION_LOCK_SCREEN else GLOBAL_ACTION_POWER_DIALOG
+                    "TAKE_SCREENSHOT" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) GLOBAL_ACTION_TAKE_SCREENSHOT else GLOBAL_ACTION_NOTIFICATIONS
+                    else -> intent.getIntExtra("GLOBAL_ACTION_TYPE", GLOBAL_ACTION_BACK)
                 }
+                performGlobalAction(globalCode)
             }
         }
     }

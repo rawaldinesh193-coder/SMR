@@ -3,271 +3,209 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMR CyberMirror — Matrix Personal Auto-Connect Console</title>
+  <title>Display Console — Remote Display & Touch Controller</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --matrix-green: #00FF66;
-      --matrix-emerald: #10B981;
-      --matrix-bg: #020617;
-      --matrix-card: rgba(6, 24, 18, 0.85);
+      --bg-dark: #090d16;
+      --panel-bg: rgba(15, 23, 42, 0.85);
+      --accent-blue: #38bdf8;
+      --accent-green: #22c55e;
     }
     body {
-      font-family: 'Fira Code', monospace;
-      background-color: var(--matrix-bg);
-      color: #E2E8F0;
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-dark);
+      color: #f1f5f9;
       background-image: 
-        radial-gradient(circle at 50% 50%, rgba(0, 255, 102, 0.04) 0%, transparent 60%),
-        linear-gradient(rgba(0, 255, 102, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 255, 102, 0.03) 1px, transparent 1px);
-      background-size: 100% 100%, 30px 30px, 30px 30px;
+        radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 70%),
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 40px 40px, 40px 40px;
     }
     .font-orbitron { font-family: 'Orbitron', sans-serif; }
-    .font-mono-tech { font-family: 'Share Tech Mono', monospace; }
-    
-    .matrix-panel {
-      background: var(--matrix-card);
-      backdrop-filter: blur(20px);
-      border: 1px solid rgba(0, 255, 102, 0.25);
-      box-shadow: 0 0 30px -5px rgba(0, 255, 102, 0.15), inset 0 0 15px rgba(0, 255, 102, 0.05);
-    }
-    
-    .matrix-glow-text {
-      text-shadow: 0 0 10px rgba(0, 255, 102, 0.7), 0 0 20px rgba(0, 255, 102, 0.4);
+    .font-mono-code { font-family: 'JetBrains Mono', monospace; }
+
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     }
 
-    .phone-frame {
+    .display-frame {
       position: relative;
-      padding: 10px;
-      background: #05140D;
-      border-radius: 36px;
-      border: 2px solid rgba(0, 255, 102, 0.4);
-      box-shadow: 0 0 45px rgba(0, 255, 102, 0.25), 0 20px 50px rgba(0, 0, 0, 0.95);
+      padding: 8px;
+      background: #020617;
+      border-radius: 32px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 20px rgba(56, 189, 248, 0.1);
       transition: all 0.3s ease;
     }
-    .phone-frame::before {
-      content: '';
-      position: absolute;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 80px;
-      height: 12px;
-      background: #020705;
-      border-radius: 8px;
-      z-index: 10;
-      border: 1px solid rgba(0, 255, 102, 0.2);
-    }
+    
     .video-canvas {
       max-width: 100%;
       height: auto;
-      max-height: 80vh;
-      border-radius: 26px;
+      max-height: 82vh;
+      border-radius: 24px;
       cursor: crosshair;
-      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
     }
     
-    .cyber-btn {
-      background: rgba(0, 255, 102, 0.08);
-      border: 1px solid rgba(0, 255, 102, 0.3);
-      color: var(--matrix-green);
-      transition: all 0.2s ease;
+    .ctrl-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    .cyber-btn:hover {
-      background: rgba(0, 255, 102, 0.25);
-      border-color: var(--matrix-green);
-      box-shadow: 0 0 15px rgba(0, 255, 102, 0.4);
+    .ctrl-btn:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.4);
+      color: #38bdf8;
       transform: translateY(-1px);
-    }
-    
-    .scanline-overlay {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
-      background-size: 100% 4px;
-      pointer-events: none;
-      border-radius: 26px;
-      z-index: 5;
     }
   </style>
 </head>
 <body class="h-screen w-screen flex flex-col overflow-hidden select-none">
 
-  <!-- Matrix Top Header Navigation Bar -->
-  <header class="h-16 bg-slate-950/90 border-b border-emerald-500/30 px-6 flex items-center justify-between z-40">
+  <!-- Top Header Console Bar -->
+  <header class="h-16 bg-slate-950/90 border-b border-slate-800 px-6 flex items-center justify-between z-40">
     <div class="flex items-center space-x-4">
-      <div class="flex items-center space-x-2 bg-emerald-950/40 border border-emerald-500/40 px-3.5 py-1.5 rounded-xl shadow-[0_0_15px_rgba(0,255,102,0.15)]">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-        <span class="font-orbitron font-bold text-emerald-400 text-sm tracking-wider matrix-glow-text">SMR // PERSONAL AUTO-CONNECT</span>
-      </div>
-
-      <div class="h-4 w-px bg-emerald-900/60"></div>
-
-      <div class="flex items-center space-x-3">
-        <span id="status-pill" class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-        <span id="status-text" class="text-xs font-mono-tech text-emerald-500 tracking-widest">SYSTEM READY</span>
+      <div class="flex items-center space-x-2.5 bg-slate-900/80 border border-slate-800 px-3.5 py-1.5 rounded-xl">
+        <span id="status-pill" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span id="status-text" class="font-orbitron font-semibold text-xs tracking-wider text-slate-300">DISPLAY CONSOLE // READY</span>
       </div>
     </div>
 
-    <!-- Android Gesture Toolbar -->
-    <div id="android-controls" class="hidden items-center bg-emerald-950/60 border border-emerald-500/40 rounded-xl p-1.5 space-x-1 shadow-[0_0_20px_rgba(0,255,102,0.1)]">
-      <button onclick="sendGlobalAction('BACK')" class="cyber-btn px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1" title="Back Button">
-        <span>◀ BACK</span>
+    <!-- Android Hardware Navigation Controls -->
+    <div id="android-controls" class="hidden items-center bg-slate-900/90 border border-slate-800 rounded-xl p-1.5 space-x-1 shadow-lg">
+      <button onclick="sendGlobalAction('BACK')" class="ctrl-btn px-3 py-1.5 rounded-lg text-xs font-mono-code flex items-center space-x-1" title="Back Button">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        <span>BACK</span>
       </button>
-      <button onclick="sendGlobalAction('HOME')" class="cyber-btn px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1" title="Home Button">
-        <span>⌂ HOME</span>
+      <button onclick="sendGlobalAction('HOME')" class="ctrl-btn px-3 py-1.5 rounded-lg text-xs font-mono-code flex items-center space-x-1" title="Home Button">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+        <span>HOME</span>
       </button>
-      <button onclick="sendGlobalAction('RECENTS')" class="cyber-btn px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1" title="App Switcher">
-        <span>▢ APPS</span>
+      <button onclick="sendGlobalAction('RECENTS')" class="ctrl-btn px-3 py-1.5 rounded-lg text-xs font-mono-code flex items-center space-x-1" title="Overview">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        <span>APPS</span>
       </button>
-      <div class="h-4 w-px bg-emerald-800/60 mx-1"></div>
-      <button onclick="sendGlobalAction('NOTIFICATIONS')" class="cyber-btn px-2 py-1.5 rounded-lg text-xs" title="Pull Down Notifications">
-        <span>🔔 SHADE</span>
-      </button>
-      <button onclick="sendGlobalAction('QUICK_SETTINGS')" class="cyber-btn px-2 py-1.5 rounded-lg text-xs" title="Quick Settings">
-        <span>⚙ SYSTEM</span>
-      </button>
-      <button onclick="sendGlobalAction('LOCK_SCREEN')" class="cyber-btn px-2 py-1.5 rounded-lg text-xs" title="Lock Screen">
-        <span>🔒 LOCK</span>
-      </button>
-      <button onclick="sendGlobalAction('TAKE_SCREENSHOT')" class="cyber-btn px-2 py-1.5 rounded-lg text-xs" title="Take Screenshot">
-        <span>📸 CAPTURE</span>
-      </button>
+      <div class="h-4 w-px bg-slate-800 mx-1"></div>
+      <button onclick="sendGlobalAction('NOTIFICATIONS')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Notifications">SHADE</button>
+      <button onclick="sendGlobalAction('QUICK_SETTINGS')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Settings">SYSTEM</button>
+      <button onclick="sendGlobalAction('LOCK_SCREEN')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Lock Screen">LOCK</button>
+      <button onclick="sendGlobalAction('TAKE_SCREENSHOT')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Screenshot">CAPTURE</button>
     </div>
 
-    <!-- Action Toolbar -->
+    <!-- Action Bar -->
     <div class="flex items-center space-x-3">
-      <button onclick="openMagicLinkModal()" class="cyber-btn px-3 py-1.5 rounded-xl text-xs font-mono-tech flex items-center space-x-1.5 border-emerald-500/50" title="Generate One-Click Magic Link">
-        <span class="text-emerald-400">🔗 MAGIC LINK</span>
+      <button onclick="openMagicLinkModal()" class="ctrl-btn px-3 py-1.5 rounded-xl text-xs font-mono-code flex items-center space-x-1.5" title="Generate Connect Link">
+        <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+        <span>CONNECT LINK</span>
       </button>
 
-      <button onclick="openServerConfigModal()" class="cyber-btn px-3 py-1.5 rounded-xl text-xs font-mono-tech flex items-center space-x-1.5" title="Render Server URL">
-        <span id="server-url-display" class="text-emerald-400">smr-kzjz.onrender.com</span>
+      <button onclick="toggleDiagnostics()" class="ctrl-btn p-2 rounded-xl text-xs" title="Telemetry HUD">
+        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
       </button>
 
-      <button onclick="toggleDiagnostics()" class="cyber-btn p-2 rounded-xl text-xs" title="HUD Diagnostics">
-        <span>⚡ HUD</span>
-      </button>
-
-      <button onclick="instantAutoConnect()" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)] transition transform hover:scale-105">
-        <span>INSTANT CONNECT</span>
+      <button onclick="instantAutoConnect()" class="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-sky-500/20 transition transform hover:scale-105 font-orbitron">
+        INSTANT CONNECT
       </button>
     </div>
   </header>
 
-  <!-- Main Viewport -->
+  <!-- Main Display Container -->
   <main class="flex-1 relative flex items-center justify-center p-4 overflow-hidden">
 
-    <!-- Idle Cyber Setup Card -->
-    <div id="idle-card" class="flex flex-col items-center justify-center text-center max-w-md matrix-panel p-8 rounded-3xl z-10">
-      <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center mb-5 shadow-[0_0_20px_rgba(0,255,102,0.2)]">
-        <svg class="w-8 h-8 text-emerald-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+    <!-- Setup Card -->
+    <div id="idle-card" class="flex flex-col items-center justify-center text-center max-w-md glass-panel p-8 rounded-3xl z-10 border border-slate-800">
+      <div class="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mb-5 text-sky-400">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
       </div>
-      <h2 class="text-2xl font-bold font-orbitron text-emerald-400 matrix-glow-text">PERSONAL AUTO-MIRROR</h2>
-      <p class="text-xs text-slate-400 mt-2 font-mono-tech leading-relaxed">
-        Zero codes required. Click Instant Connect below or tap your One-Click Magic Link on your phone.
+      <h2 class="text-xl font-bold font-orbitron text-slate-100 mb-2">REMOTE DISPLAY CONSOLE</h2>
+      <p class="text-xs text-slate-400 font-mono-code leading-relaxed mb-6">
+        High-performance WebRTC display mirror and remote touch controller.
       </p>
 
-      <div class="w-full my-4 p-3 bg-slate-950/90 rounded-xl border border-emerald-500/30 text-left text-xs font-mono-tech flex items-center justify-between">
-        <span class="truncate">BACKEND: <strong id="active-server-label" class="text-emerald-400">https://smr-kzjz.onrender.com</strong></span>
-        <button onclick="openServerConfigModal()" class="text-emerald-400 underline text-xs">EDIT</button>
+      <div class="w-full mb-5 p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-left text-xs font-mono-code flex items-center justify-between text-slate-400">
+        <span class="truncate">GATEWAY: <strong id="active-server-label" class="text-sky-400">https://smr-kzjz.onrender.com</strong></span>
+        <button onclick="openServerConfigModal()" class="text-sky-400 hover:underline text-xs ml-2">CONFIG</button>
       </div>
 
-      <button onclick="instantAutoConnect()" class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.5)] transition transform hover:scale-[1.02]">
-        ⚡ INSTANT CONNECT (NO CODE NEEDED)
+      <button onclick="instantAutoConnect()" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-orbitron font-bold rounded-2xl text-xs shadow-lg shadow-sky-500/20 transition transform hover:scale-[1.02]">
+        CONNECT DISPLAY
       </button>
 
-      <button onclick="openMagicLinkModal()" class="w-full mt-2.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 font-mono-tech rounded-xl text-xs transition">
-        🔗 GENERATE ONE-CLICK MAGIC LINK FOR PHONE
-      </button>
-
-      <button onclick="openPairingModal()" class="mt-3 text-xs font-mono-tech text-emerald-500/80 hover:text-emerald-400 underline">
-        Optional: Enter Manual 6-Digit Code
+      <button onclick="openMagicLinkModal()" class="w-full mt-2.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-mono-code rounded-xl text-xs transition">
+        GET MOBILE CONNECT LINK
       </button>
     </div>
 
-    <!-- Active Video Stream Frame with Gesture Overlay -->
+    <!-- Active Video Stream Frame -->
     <div id="stream-container" class="hidden relative flex flex-col items-center justify-center">
-      <div class="phone-frame">
+      <div class="display-frame">
         <video id="remote-video" autoplay playsinline class="video-canvas"></video>
-        <div class="scanline-overlay"></div>
       </div>
 
-      <!-- Quick Swipe Floating Control Pad -->
-      <div id="gesture-pad" class="mt-3 flex items-center justify-center space-x-2 bg-slate-950/80 border border-emerald-500/30 px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(0,255,102,0.1)]">
-        <span class="text-[10px] text-emerald-500 font-mono-tech mr-1">SWIPES:</span>
-        <button onclick="sendSwipe('UP')" class="cyber-btn px-2 py-0.5 rounded text-[11px]" title="Swipe Up">▲ UP</button>
-        <button onclick="sendSwipe('DOWN')" class="cyber-btn px-2 py-0.5 rounded text-[11px]" title="Swipe Down">▼ DOWN</button>
-        <button onclick="sendSwipe('LEFT')" class="cyber-btn px-2 py-0.5 rounded text-[11px]" title="Swipe Left">◀ LEFT</button>
-        <button onclick="sendSwipe('RIGHT')" class="cyber-btn px-2 py-0.5 rounded text-[11px]" title="Swipe Right">► RIGHT</button>
+      <!-- Floating Gesture Touch Pad -->
+      <div id="gesture-pad" class="mt-3 flex items-center justify-center space-x-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-full shadow-lg">
+        <span class="text-[11px] text-slate-400 font-mono-code mr-1">SWIPE:</span>
+        <button onclick="sendSwipe('UP')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">UP</button>
+        <button onclick="sendSwipe('DOWN')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">DOWN</button>
+        <button onclick="sendSwipe('LEFT')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">LEFT</button>
+        <button onclick="sendSwipe('RIGHT')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">RIGHT</button>
       </div>
     </div>
 
-    <!-- Matrix Cybernetic Diagnostics Overlay -->
-    <div id="diagnostics-hud" class="hidden absolute top-6 right-6 w-80 matrix-panel rounded-2xl p-4 text-xs font-mono-tech z-50">
-      <div class="flex justify-between items-center border-b border-emerald-500/30 pb-2 mb-3">
-        <span class="font-bold font-orbitron text-emerald-400">TELEMETRY // HUD</span>
-        <button onclick="toggleDiagnostics()" class="text-emerald-400 hover:text-white font-bold">×</button>
+    <!-- Telemetry HUD Overlay -->
+    <div id="diagnostics-hud" class="hidden absolute top-6 right-6 w-80 glass-panel rounded-2xl p-4 text-xs font-mono-code z-50">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-2 mb-3">
+        <span class="font-bold font-orbitron text-slate-200">TELEMETRY HUD</span>
+        <button onclick="toggleDiagnostics()" class="text-slate-400 hover:text-white font-bold">×</button>
       </div>
       <div class="space-y-2">
-        <div class="flex justify-between"><span class="text-slate-400">RTT Latency:</span><span id="hud-rtt" class="text-emerald-400 font-semibold">12 ms</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">FPS Rate:</span><span id="hud-fps" class="text-emerald-300">60 FPS</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Encryption:</span><span id="hud-transport" class="text-emerald-400">WebRTC DTLS-SRTP</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">DataChannel:</span><span id="hud-dc" class="text-emerald-400">ACTIVE (Input Ready)</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Latency (RTT):</span><span id="hud-rtt" class="text-sky-400 font-semibold">12 ms</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">FPS Rate:</span><span id="hud-fps" class="text-emerald-400">60 FPS</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Encryption:</span><span id="hud-transport" class="text-slate-300">WebRTC DTLS-SRTP</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Input DataChannel:</span><span id="hud-dc" class="text-emerald-400">ACTIVE</span></div>
       </div>
     </div>
   </main>
 
-  <!-- One-Click Magic Link Generator Modal -->
-  <div id="magic-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50 p-4">
-    <div class="matrix-panel rounded-3xl p-8 w-full max-w-md text-center">
-      <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-xl font-bold">🔗</div>
-      <h3 class="text-xl font-bold font-orbitron text-emerald-400 mb-1">ONE-CLICK MAGIC LINK</h3>
-      <p class="text-xs text-slate-400 mb-5 font-mono-tech">Tap or open this URL on your phone to launch SMR app and start screen mirroring instantly.</p>
+  <!-- Connect Link Modal -->
+  <div id="magic-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="glass-panel rounded-3xl p-8 w-full max-w-md text-center border border-slate-800">
+      <h3 class="text-lg font-bold font-orbitron text-slate-100 mb-1">MOBILE CONNECT LINK</h3>
+      <p class="text-xs text-slate-400 mb-5 font-mono-code">Open this URL on your mobile phone to connect instantly.</p>
       
-      <div class="w-full p-3.5 bg-slate-950 border border-emerald-500/40 rounded-2xl text-xs font-mono-tech text-emerald-400 break-all mb-4">
+      <div class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs font-mono-code text-sky-400 break-all mb-5">
         <span id="magic-link-text">https://smr-kzjz.onrender.com/connect</span>
       </div>
 
       <div class="flex space-x-3">
-        <button onclick="closeMagicLinkModal()" class="w-1/2 py-3 bg-slate-950 text-slate-400 rounded-xl text-xs font-mono-tech border border-slate-800">CLOSE</button>
-        <button onclick="copyMagicLink()" class="w-1/2 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)]">
+        <button onclick="closeMagicLinkModal()" class="w-1/2 py-3 bg-slate-900 text-slate-400 rounded-xl text-xs font-mono-code border border-slate-800">CLOSE</button>
+        <button onclick="copyMagicLink()" class="w-1/2 py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg font-orbitron">
           <span id="copy-btn-label">COPY LINK</span>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Manual Pairing Modal -->
-  <div id="pairing-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50 p-4">
-    <div class="matrix-panel rounded-3xl p-8 w-full max-w-md">
-      <h3 class="text-xl font-bold font-orbitron text-emerald-400 mb-1">MANUAL CODE ENTRY</h3>
-      <p class="text-xs text-slate-400 mb-5 font-mono-tech">Optional fallback code entry if auto-connect is disabled.</p>
+  <!-- Gateway Config Modal -->
+  <div id="server-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="glass-panel rounded-3xl p-8 w-full max-w-md border border-slate-800">
+      <h3 class="text-lg font-bold font-orbitron text-slate-100 mb-1">GATEWAY CONFIGURATION</h3>
+      <p class="text-xs text-slate-400 mb-5 font-mono-code">WebRTC signaling server endpoint.</p>
       
-      <input type="text" id="pairing-input" placeholder="SMR-8924" class="w-full px-4 py-3.5 bg-slate-950 border border-emerald-500/40 rounded-2xl text-center text-3xl font-mono-tech font-bold tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-400 mb-5 shadow-[0_0_20px_rgba(0,255,102,0.2)]">
-      
-      <div class="flex space-x-3">
-        <button onclick="closePairingModal()" class="w-1/2 py-3 bg-slate-950 text-slate-400 rounded-xl text-xs font-mono-tech border border-slate-800">CANCEL</button>
-        <button onclick="submitPairing()" class="w-1/2 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)]">CONNECT</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Server Config Modal -->
-  <div id="server-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50 p-4">
-    <div class="matrix-panel rounded-3xl p-8 w-full max-w-md">
-      <h3 class="text-xl font-bold font-orbitron text-emerald-400 mb-1">NODE CONFIGURATION</h3>
-      <p class="text-xs text-slate-400 mb-5 font-mono-tech">Pre-configured Render cloud signaling backend.</p>
-      
-      <label class="block text-xs font-mono-tech text-emerald-400 mb-2">BACKEND SERVER URL:</label>
-      <input type="text" id="server-url-input" value="https://smr-kzjz.onrender.com" class="w-full px-4 py-3 bg-slate-950 border border-emerald-500/40 rounded-2xl text-sm font-mono-tech text-emerald-400 focus:outline-none focus:border-emerald-400 mb-5">
+      <label class="block text-xs font-mono-code text-slate-400 mb-2">SIGNALING SERVER URL:</label>
+      <input type="text" id="server-url-input" value="https://smr-kzjz.onrender.com" class="w-full px-4 py-3 bg-slate-950 border border-slate-800 rounded-2xl text-sm font-mono-code text-sky-400 focus:outline-none focus:border-sky-400 mb-5">
       
       <div class="flex space-x-3">
-        <button onclick="closeServerConfigModal()" class="w-1/2 py-3 bg-slate-950 text-slate-400 rounded-xl text-xs font-mono-tech border border-slate-800">CANCEL</button>
-        <button onclick="saveServerConfig()" class="w-1/2 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)]">SAVE URL</button>
+        <button onclick="closeServerConfigModal()" class="w-1/2 py-3 bg-slate-900 text-slate-400 rounded-xl text-xs font-mono-code border border-slate-800">CANCEL</button>
+        <button onclick="saveServerConfig()" class="w-1/2 py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg font-orbitron">SAVE</button>
       </div>
     </div>
   </div>
@@ -300,7 +238,7 @@
       const link = document.getElementById('magic-link-text').innerText;
       navigator.clipboard.writeText(link);
       const label = document.getElementById('copy-btn-label');
-      label.innerText = 'COPIED!';
+      label.innerText = 'COPIED';
       setTimeout(() => { label.innerText = 'COPY LINK'; }, 2000);
     }
 
@@ -317,8 +255,6 @@
       closeServerConfigModal();
     }
 
-    function openPairingModal() { document.getElementById('pairing-modal').classList.remove('hidden'); }
-    function closePairingModal() { document.getElementById('pairing-modal').classList.add('hidden'); }
     function toggleDiagnostics() { document.getElementById('diagnostics-hud').classList.toggle('hidden'); }
 
     function initAutoWebSocket() {
@@ -329,7 +265,7 @@
 
         ws.onopen = () => {
           document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
-          document.getElementById('status-text').innerText = 'SMARTPHONE AUTO-READY';
+          document.getElementById('status-text').innerText = 'DISPLAY CONSOLE // READY';
           ws.send(JSON.stringify({ type: 'AUTH_REQUEST', role: 'desktop', deviceId: 'personal_laptop' }));
         };
 
@@ -337,9 +273,9 @@
           const msg = JSON.parse(event.data);
 
           if (msg.type === 'PHONE_STATUS') {
-            document.getElementById('status-text').innerText = 'PHONE ONLINE (READY TO AUTO-MIRROR)';
+            document.getElementById('status-text').innerText = 'MOBILE DEVICE ONLINE';
           } else if (msg.type === 'PAIR_APPROVAL') {
-            document.getElementById('status-text').innerText = 'CONNECTING WEBRTC STREAM...';
+            document.getElementById('status-text').innerText = 'ESTABLISHING WEBRTC STREAM...';
             initWebRtc(msg.turnServers || []);
           } else if (msg.type === 'SDP_OFFER') {
             if (pc) {
@@ -372,7 +308,7 @@
 
     function instantAutoConnect() {
       document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
-      document.getElementById('status-text').innerText = 'REQUESTING PHONE STREAM...';
+      document.getElementById('status-text').innerText = 'REQUESTING STREAM...';
 
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         initAutoWebSocket();
@@ -380,18 +316,7 @@
         return;
       }
 
-      ws.send(JSON.stringify({ type: 'AUTO_CONNECT', desktopName: 'Personal Laptop' }));
-    }
-
-    async function submitPairing() {
-      const code = document.getElementById('pairing-input').value.trim().toUpperCase();
-      closePairingModal();
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        initAutoWebSocket();
-        setTimeout(submitPairing, 1000);
-        return;
-      }
-      ws.send(JSON.stringify({ type: 'PAIR_REQUEST', pairingSessionId: code, desktopName: 'Personal Laptop' }));
+      ws.send(JSON.stringify({ type: 'AUTO_CONNECT', desktopName: 'Laptop Console' }));
     }
 
     function initWebRtc(turnServers) {
@@ -412,12 +337,12 @@
         document.getElementById('android-controls').classList.remove('hidden');
         document.getElementById('android-controls').classList.add('flex');
         document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
-        document.getElementById('status-text').innerText = 'CONNECTED (P2P WEBRTC LIVE MIRROR)';
+        document.getElementById('status-text').innerText = 'DISPLAY ACTIVE // LIVE';
       };
 
       pc.ondatachannel = (event) => {
         dataChannel = event.channel;
-        document.getElementById('hud-dc').innerText = 'ACTIVE (DataChannel Ready)';
+        document.getElementById('hud-dc').innerText = 'ACTIVE';
       };
 
       pc.onicecandidate = (event) => {

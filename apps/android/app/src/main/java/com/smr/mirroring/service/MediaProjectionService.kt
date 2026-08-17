@@ -16,7 +16,7 @@ import org.webrtc.VideoCapturer
 class MediaProjectionService : Service() {
 
     private val binder = LocalBinder()
-    var videoCapturer: VideoCapturer? = null
+    var currentVideoCapturer: VideoCapturer? = null
         private set
 
     inner class LocalBinder : Binder() {
@@ -25,6 +25,7 @@ class MediaProjectionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         startForegroundServiceNotification()
     }
 
@@ -40,19 +41,9 @@ class MediaProjectionService : Service() {
         }
 
         if (resultCode == Activity.RESULT_OK && resultData != null) {
-            try {
-                cachedResultCode = resultCode
-                cachedResultData = resultData
-
-                videoCapturer = ScreenCapturerAndroid(resultData, object : MediaProjection.Callback() {
-                    override fun onStop() {
-                        Log.i(TAG, "MediaProjection session paused or stopped by system")
-                    }
-                })
-                Log.i(TAG, "ScreenCapturerAndroid instantiated & persistent consent cached.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error initializing ScreenCapturerAndroid", e)
-            }
+            cachedResultCode = resultCode
+            cachedResultData = resultData
+            Log.i(TAG, "MediaProjection persistent consent cached successfully.")
         }
 
         return START_STICKY
@@ -63,12 +54,13 @@ class MediaProjectionService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            videoCapturer?.stopCapture()
-            videoCapturer?.dispose()
+            currentVideoCapturer?.stopCapture()
+            currentVideoCapturer?.dispose()
         } catch (e: Exception) {
             Log.e(TAG, "Error disposing videoCapturer", e)
         }
-        videoCapturer = null
+        currentVideoCapturer = null
+        instance = null
     }
 
     private fun startForegroundServiceNotification() {
@@ -78,17 +70,17 @@ class MediaProjectionService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "SMR Screen Mirroring Service",
+                "Background Screen Streaming Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Persistent background screen mirroring & remote control service"
+                description = "Persistent background screen stream & remote control service"
             }
             notificationManager.createNotificationChannel(channel)
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("SMR Cyber Mirror Active")
-            .setContentText("Background Screen Mirroring & Remote Control Ready")
+            .setContentTitle("Background Mirroring Active")
+            .setContentText("Screen stream & laptop remote control service running in background")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setOngoing(true)
             .build()
@@ -112,6 +104,9 @@ class MediaProjectionService : Service() {
         private const val TAG = "MediaProjectionService"
         private const val NOTIFICATION_ID = 9901
 
+        var instance: MediaProjectionService? = null
+            private set
+
         var cachedResultCode: Int = Activity.RESULT_CANCELED
             private set
         var cachedResultData: Intent? = null
@@ -119,6 +114,20 @@ class MediaProjectionService : Service() {
 
         fun hasValidConsent(): Boolean {
             return cachedResultCode == Activity.RESULT_OK && cachedResultData != null
+        }
+
+        fun createScreenCapturer(): ScreenCapturerAndroid? {
+            val data = cachedResultData ?: return null
+            return try {
+                ScreenCapturerAndroid(data, object : MediaProjection.Callback() {
+                    override fun onStop() {
+                        Log.i(TAG, "MediaProjection session paused by system")
+                    }
+                })
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating ScreenCapturerAndroid", e)
+                null
+            }
         }
     }
 }
