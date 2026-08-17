@@ -109,15 +109,15 @@ class RemoteAccessibilityService : AccessibilityService() {
     private fun performTap(x: Float, y: Float) {
         val path = Path().apply {
             moveTo(x, y)
-            lineTo(x + 1f, y + 1f)
+            lineTo(x + 2f, y + 2f)
         }
-        dispatchStroke(path, duration = 60L)
+        dispatchStroke(path, duration = 120L)
     }
 
     private fun performLongPress(x: Float, y: Float) {
         val path = Path().apply {
             moveTo(x, y)
-            lineTo(x + 1f, y + 1f)
+            lineTo(x + 2f, y + 2f)
         }
         dispatchStroke(path, duration = 1000L)
     }
@@ -135,22 +135,22 @@ class RemoteAccessibilityService : AccessibilityService() {
         when (action) {
             "TOUCH_DOWN" -> {
                 path.moveTo(x, y)
-                path.lineTo(x + 1f, y + 1f)
+                path.lineTo(x + 2f, y + 2f)
                 lastTouchX = x
                 lastTouchY = y
-                dispatchStroke(path, duration = 50L)
+                dispatchStroke(path, duration = 80L)
             }
             "TOUCH_MOVE" -> {
                 path.moveTo(lastTouchX, lastTouchY)
                 path.lineTo(x, y)
                 lastTouchX = x
                 lastTouchY = y
-                dispatchStroke(path, duration = 30L)
+                dispatchStroke(path, duration = 40L)
             }
             "TOUCH_UP" -> {
                 path.moveTo(lastTouchX, lastTouchY)
                 path.lineTo(x, y)
-                dispatchStroke(path, duration = 20L)
+                dispatchStroke(path, duration = 30L)
             }
         }
     }
@@ -161,10 +161,11 @@ class RemoteAccessibilityService : AccessibilityService() {
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 super.onCompleted(gestureDescription)
+                Log.d(TAG, "Gesture stroke executed successfully")
             }
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 super.onCancelled(gestureDescription)
-                Log.w(TAG, "Gesture cancelled")
+                Log.w(TAG, "Gesture stroke cancelled")
             }
         }, null)
     }

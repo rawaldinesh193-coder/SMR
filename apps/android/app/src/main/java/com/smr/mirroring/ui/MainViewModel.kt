@@ -15,7 +15,6 @@ import com.smr.mirroring.network.SignalingClient
 import com.smr.mirroring.service.MediaProjectionService
 import com.smr.mirroring.service.RemoteAccessibilityService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -161,8 +160,18 @@ class MainViewModel : ViewModel() {
     }
 
     fun approvePairing(activity: Activity) {
-        val projectionManager = activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-        activity.startActivityForResult(projectionManager.createScreenCaptureIntent(), 9001)
+        // Reuse persistent screen capture consent if cached
+        if (MediaProjectionService.hasValidConsent()) {
+            Log.i("MainViewModel", "Reusing cached persistent screen capture consent token")
+            onScreenCaptureConsentGranted(
+                activity,
+                MediaProjectionService.cachedResultCode,
+                MediaProjectionService.cachedResultData!!
+            )
+        } else {
+            val projectionManager = activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            activity.startActivityForResult(projectionManager.createScreenCaptureIntent(), 9001)
+        }
     }
 
     fun onScreenCaptureConsentGranted(context: Context, resultCode: Int, data: Intent) {
@@ -179,7 +188,7 @@ class MainViewModel : ViewModel() {
 
             val projectionCallback = object : MediaProjection.Callback() {
                 override fun onStop() {
-                    Log.i("MainViewModel", "MediaProjection session stopped.")
+                    Log.i("MainViewModel", "MediaProjection session paused by system")
                 }
             }
 

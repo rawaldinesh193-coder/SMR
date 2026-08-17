@@ -41,21 +41,21 @@ class MediaProjectionService : Service() {
 
         if (resultCode == Activity.RESULT_OK && resultData != null) {
             try {
+                cachedResultCode = resultCode
+                cachedResultData = resultData
+
                 videoCapturer = ScreenCapturerAndroid(resultData, object : MediaProjection.Callback() {
                     override fun onStop() {
-                        Log.i(TAG, "MediaProjection stopped by user or system")
-                        stopSelf()
+                        Log.i(TAG, "MediaProjection session paused or stopped by system")
                     }
                 })
-                Log.i(TAG, "ScreenCapturerAndroid successfully instantiated.")
+                Log.i(TAG, "ScreenCapturerAndroid instantiated & persistent consent cached.")
             } catch (e: Exception) {
                 Log.e(TAG, "Error initializing ScreenCapturerAndroid", e)
             }
-        } else {
-            Log.e(TAG, "Invalid resultCode or resultData for MediaProjection")
         }
 
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -69,7 +69,6 @@ class MediaProjectionService : Service() {
             Log.e(TAG, "Error disposing videoCapturer", e)
         }
         videoCapturer = null
-        Log.i(TAG, "MediaProjectionService destroyed")
     }
 
     private fun startForegroundServiceNotification() {
@@ -79,17 +78,17 @@ class MediaProjectionService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "Screen Mirroring Service",
+                "SMR Screen Mirroring Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Active screen mirroring session notification"
+                description = "Persistent background screen mirroring & remote control service"
             }
             notificationManager.createNotificationChannel(channel)
         }
 
         val notification: Notification = NotificationCompat.Builder(this, channelId)
-            .setContentTitle("SMR Screen Mirroring Active")
-            .setContentText("Phone screen is currently being mirrored to paired laptop")
+            .setContentTitle("SMR Cyber Mirror Active")
+            .setContentText("Background Screen Mirroring & Remote Control Ready")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setOngoing(true)
             .build()
@@ -112,5 +111,14 @@ class MediaProjectionService : Service() {
     companion object {
         private const val TAG = "MediaProjectionService"
         private const val NOTIFICATION_ID = 9901
+
+        var cachedResultCode: Int = Activity.RESULT_CANCELED
+            private set
+        var cachedResultData: Intent? = null
+            private set
+
+        fun hasValidConsent(): Boolean {
+            return cachedResultCode == Activity.RESULT_OK && cachedResultData != null
+        }
     }
 }
