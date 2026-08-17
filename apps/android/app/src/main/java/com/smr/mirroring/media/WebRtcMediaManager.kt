@@ -2,6 +2,7 @@ package com.smr.mirroring.media
 
 import android.content.Context
 import android.content.Intent
+import android.media.projection.MediaProjection
 import android.util.Log
 import com.smr.mirroring.service.RemoteAccessibilityService
 import org.json.JSONObject
@@ -14,6 +15,7 @@ class WebRtcMediaManager(private val context: Context) {
     private var videoSource: VideoSource? = null
     private var localVideoTrack: VideoTrack? = null
     private var dataChannel: DataChannel? = null
+    private var capturer: ScreenCapturerAndroid? = null
     private val rootEglBase: EglBase = EglBase.create()
 
     init {
@@ -31,17 +33,30 @@ class WebRtcMediaManager(private val context: Context) {
             .createPeerConnectionFactory()
     }
 
-    fun startWebRtcSession(
-        capturer: VideoCapturer,
+    fun startWebRtcSessionWithIntent(
+        projectionData: Intent,
         iceServers: List<PeerConnection.IceServer>,
         onSdpOfferCreated: (String) -> Unit,
         onIceCandidateGenerated: (IceCandidate) -> Unit
-    ) {
-        try {
-            videoSource = factory?.createVideoSource(capturer.isScreencast)
+    ): Boolean {
+        return try {
+            closeExistingSession()
+
+            val clonedIntent = projectionData.clone() as Intent
+            capturer = ScreenCapturerAndroid(clonedIntent, object : MediaProjection.Callback() {
+                override fun onStop() {
+                    Log.i(TAG, "MediaProjection session stopped by system callback")
+                }
+            })
+
+            videoSource = factory?.createVideoSource(true)
             val surfaceTextureHelper = SurfaceTextureHelper.create("WebRTCThread", rootEglBase.eglBaseContext)
-            capturer.initialize(surfaceTextureHelper, context, videoSource?.capturerObserver)
-            capturer.startCapture(1080, 1920, 30)
+            capturer?.initialize(surfaceTextureHelper, context, videoSource?.capturerObserver)
+
+            val metrics = context.resources.displayMetrics
+            val width = if (metrics.widthPixels > 0) metrics.widthPixels else 1080
+            val height = if (metrics.heightPixels > 0) metrics.heightPixels else 1920
+            capturer?.startCapture(width, height, 30)
 
             localVideoTrack = factory?.createVideoTrack("100", videoSource)
 
@@ -86,8 +101,11 @@ class WebRtcMediaManager(private val context: Context) {
                     }, sdp)
                 }
             }, mediaConstraints)
+
+            true
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting WebRTC session", e)
+            Log.e(TAG, "Failed to start WebRTC session safely", e)
+            false
         }
     }
 
@@ -153,11 +171,29 @@ class WebRtcMediaManager(private val context: Context) {
         }
     }
 
-    fun close() {
+    private fun closeExistingSession() {
+        try {
+            capturer?.stopCapture()
+            capturer?.dispose()
+            capturer = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping capturer", e)
+        }
         try {
             dataChannel?.close()
             peerConnection?.close()
             videoSource?.dispose()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error closing peerConnection", e)
+        }
+        dataChannel = null
+        peerConnection = null
+        videoSource = null
+    }
+
+    fun close() {
+        closeExistingSession()
+        try {
             factory?.dispose()
             rootEglBase.release()
         } catch (e: Exception) {

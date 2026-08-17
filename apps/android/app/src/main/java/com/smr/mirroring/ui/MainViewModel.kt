@@ -21,7 +21,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.webrtc.PeerConnection
-import org.webrtc.ScreenCapturerAndroid
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -191,29 +190,18 @@ class MainViewModel : ViewModel() {
                 putExtra("EXTRA_RESULT_CODE", resultCode)
                 putExtra("EXTRA_RESULT_DATA", data)
             }
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(serviceIntent)
-            } else {
-                context.startService(serviceIntent)
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+            } catch (e: Exception) {
+                Log.w("MainViewModel", "Could not start foreground service safely: ${e.message}")
             }
 
-            webRtcMediaManager?.close()
-            webRtcMediaManager = WebRtcMediaManager(context)
-
-            var screenCapturer: ScreenCapturerAndroid? = MediaProjectionService.createScreenCapturer()
-            if (screenCapturer == null) {
-                try {
-                    val clonedData = data.clone() as Intent
-                    screenCapturer = ScreenCapturerAndroid(clonedData, object : android.media.projection.MediaProjection.Callback() {})
-                } catch (e: Exception) {
-                    Log.w("MainViewModel", "Failed to instantiate ScreenCapturerAndroid directly: ${e.message}")
-                    MediaProjectionService.clearConsent()
-                    if (context is Activity) {
-                        val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        context.startActivityForResult(projectionManager.createScreenCaptureIntent(), 9001)
-                    }
-                    return
-                }
+            if (webRtcMediaManager == null) {
+                webRtcMediaManager = WebRtcMediaManager(context)
             }
 
             val iceServers = listOf(
@@ -223,8 +211,8 @@ class MainViewModel : ViewModel() {
                 PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer()
             )
 
-            webRtcMediaManager?.startWebRtcSession(
-                capturer = screenCapturer,
+            val sessionStarted = webRtcMediaManager?.startWebRtcSessionWithIntent(
+                projectionData = data,
                 iceServers = iceServers,
                 onSdpOfferCreated = { sdpOfferStr ->
                     val offerMsg = JSONObject().apply {
@@ -247,7 +235,16 @@ class MainViewModel : ViewModel() {
                     }
                     signalingClient?.sendMessage(iceMsg)
                 }
-            )
+            ) ?: false
+
+            if (!sessionStarted) {
+                MediaProjectionService.clearConsent()
+                if (context is Activity) {
+                    val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    context.startActivityForResult(projectionManager.createScreenCaptureIntent(), 9001)
+                }
+                return
+            }
 
             val approvalMsg = JSONObject().apply {
                 put("type", "PAIR_APPROVAL")
