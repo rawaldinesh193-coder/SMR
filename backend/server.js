@@ -63,10 +63,9 @@ class InMemoryStore {
       }
     }
 
-    // Smart Fallback: Return single active pending session if active
     const activeSessions = Array.from(this.pairingSessions.values()).filter(s => Date.now() <= s.expiresAt);
     if (activeSessions.length > 0) {
-      return activeSessions[activeSessions.length - 1]; // Return latest session
+      return activeSessions[activeSessions.length - 1];
     }
 
     return undefined;
@@ -247,12 +246,28 @@ async function start() {
     });
   });
 
-  // WebSocket Signaling Gateway with Direct Relay
+  // WebSocket Signaling Gateway with Cross-Version Fastify Connection Unwrapping
   fastify.get('/ws/signaling', { websocket: true }, (connection) => {
-    const socket = connection.socket;
+    // Robustly extract the WebSocket object across all @fastify/websocket versions
+    const socket = connection?.socket || connection?.raw || connection;
+    if (!socket || typeof socket.on !== 'function') {
+      fastify.log.error('Invalid WebSocket connection object received');
+      return;
+    }
+
     let clientId = null;
     let role = null;
     let deviceId = null;
+
+    const safeSend = (wsTarget, payload) => {
+      try {
+        if (wsTarget && typeof wsTarget.send === 'function' && wsTarget.readyState === 1) {
+          wsTarget.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
+        }
+      } catch (e) {
+        fastify.log.error('WebSocket send error', e);
+      }
+    };
 
     socket.on('message', (rawData) => {
       try {
@@ -267,9 +282,9 @@ async function start() {
               deviceId = decoded.deviceId;
 
               store.registerClient({ id: clientId, role, deviceId, ws: socket });
-              socket.send(JSON.stringify({ type: 'AUTH_RESPONSE', success: true }));
+              safeSend(socket, { type: 'AUTH_RESPONSE', success: true });
             } catch (err) {
-              socket.send(JSON.stringify({ type: 'AUTH_RESPONSE', success: false, error: 'Unauthorized' }));
+              safeSend(socket, { type: 'AUTH_RESPONSE', success: false, error: 'Unauthorized' });
             }
             break;
           }
@@ -277,35 +292,35 @@ async function start() {
           case 'PAIR_REQUEST': {
             const session = store.getPairingByCodeOrToken(msg.pairingSessionId) || store.getPairingSession(msg.pairingSessionId);
             if (!session) {
-              socket.send(JSON.stringify({ type: 'ERROR', message: 'Pairing session invalid or expired' }));
+              safeSend(socket, { type: 'ERROR', message: 'Pairing session invalid or expired' });
               break;
             }
             session.desktopWs = socket;
             const android = store.findAndroidByDeviceId(session.deviceId);
-            if (android && android.ws.readyState === 1) {
+            if (android && android.ws) {
               store.linkPeers(socket, android.ws);
-              android.ws.send(JSON.stringify({
+              safeSend(android.ws, {
                 type: 'PAIR_REQUEST',
                 pairingSessionId: session.pairingSessionId,
                 desktopName: msg.desktopName || 'Laptop Client'
-              }));
+              });
             } else {
-              socket.send(JSON.stringify({ type: 'ERROR', message: 'Android phone is offline or not connected to signaling' }));
+              safeSend(socket, { type: 'ERROR', message: 'Android phone is offline or not connected to signaling' });
             }
             break;
           }
 
           case 'PAIR_APPROVAL': {
             const session = store.getPairingSession(msg.pairingSessionId);
-            if (session && session.desktopWs && session.desktopWs.readyState === 1) {
+            if (session && session.desktopWs) {
               const turnServers = generateTurnCredentials(session.deviceId);
               store.linkPeers(socket, session.desktopWs);
-              session.desktopWs.send(JSON.stringify({
+              safeSend(session.desktopWs, {
                 type: 'PAIR_APPROVAL',
                 pairingSessionId: msg.pairingSessionId,
                 approved: true,
                 turnServers
-              }));
+              });
             }
             break;
           }
@@ -314,14 +329,14 @@ async function start() {
           case 'SDP_ANSWER':
           case 'ICE_CANDIDATE': {
             const targetWs = store.getTargetPeer(socket);
-            if (targetWs && targetWs.readyState === 1) {
-              targetWs.send(JSON.stringify(msg));
+            if (targetWs) {
+              safeSend(targetWs, msg);
             } else {
               const session = store.getPairingSession(msg.sessionId || msg.pairingSessionId);
               if (session) {
                 const target = role === 'android' ? session.desktopWs : store.findAndroidByDeviceId(session.deviceId)?.ws;
-                if (target && target.readyState === 1) {
-                  target.send(JSON.stringify(msg));
+                if (target) {
+                  safeSend(target, msg);
                 }
               }
             }
@@ -329,7 +344,7 @@ async function start() {
           }
 
           case 'PING': {
-            socket.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+            safeSend(socket, { type: 'PONG', timestamp: Date.now() });
             break;
           }
         }
