@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SMR CyberMirror — Matrix Remote Control Console</title>
+  <title>SMR CyberMirror — Matrix Personal Auto-Connect Console</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -70,7 +70,6 @@
       box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
     }
     
-    /* Cyber Pulse Button */
     .cyber-btn {
       background: rgba(0, 255, 102, 0.08);
       border: 1px solid rgba(0, 255, 102, 0.3);
@@ -84,7 +83,6 @@
       transform: translateY(-1px);
     }
     
-    /* Scanlines effect */
     .scanline-overlay {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -103,14 +101,14 @@
     <div class="flex items-center space-x-4">
       <div class="flex items-center space-x-2 bg-emerald-950/40 border border-emerald-500/40 px-3.5 py-1.5 rounded-xl shadow-[0_0_15px_rgba(0,255,102,0.15)]">
         <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-        <span class="font-orbitron font-bold text-emerald-400 text-sm tracking-wider matrix-glow-text">SMR // MATRIX REMOTE</span>
+        <span class="font-orbitron font-bold text-emerald-400 text-sm tracking-wider matrix-glow-text">SMR // PERSONAL AUTO-CONNECT</span>
       </div>
 
       <div class="h-4 w-px bg-emerald-900/60"></div>
 
       <div class="flex items-center space-x-3">
         <span id="status-pill" class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-        <span id="status-text" class="text-xs font-mono-tech text-emerald-500 tracking-widest">SYSTEM DISCONNECTED</span>
+        <span id="status-text" class="text-xs font-mono-tech text-emerald-500 tracking-widest">SYSTEM READY</span>
       </div>
     </div>
 
@@ -150,8 +148,8 @@
         <span>⚡ HUD</span>
       </button>
 
-      <button onclick="openPairingModal()" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)] transition transform hover:scale-105">
-        <span>CONNECT PHONE</span>
+      <button onclick="instantAutoConnect()" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_20px_rgba(0,255,102,0.4)] transition transform hover:scale-105">
+        <span>INSTANT CONNECT</span>
       </button>
     </div>
   </header>
@@ -162,20 +160,24 @@
     <!-- Idle Cyber Setup Card -->
     <div id="idle-card" class="flex flex-col items-center justify-center text-center max-w-md matrix-panel p-8 rounded-3xl z-10">
       <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center mb-5 shadow-[0_0_20px_rgba(0,255,102,0.2)]">
-        <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+        <svg class="w-8 h-8 text-emerald-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
       </div>
-      <h2 class="text-2xl font-bold font-orbitron text-emerald-400 matrix-glow-text">CYBER MIRROR CONSOLE</h2>
+      <h2 class="text-2xl font-bold font-orbitron text-emerald-400 matrix-glow-text">PERSONAL AUTO-MIRROR</h2>
       <p class="text-xs text-slate-400 mt-2 font-mono-tech leading-relaxed">
-        Secure P2P WebRTC screen mirroring & live touch gesture remote injection over Render Cloud backend.
+        Zero codes required. Click Instant Connect below to start screen mirroring & touch remote control immediately.
       </p>
 
       <div class="w-full my-4 p-3 bg-slate-950/90 rounded-xl border border-emerald-500/30 text-left text-xs font-mono-tech flex items-center justify-between">
-        <span class="truncate">NODE: <strong id="active-server-label" class="text-emerald-400">https://smr-kzjz.onrender.com</strong></span>
+        <span class="truncate">BACKEND: <strong id="active-server-label" class="text-emerald-400">https://smr-kzjz.onrender.com</strong></span>
         <button onclick="openServerConfigModal()" class="text-emerald-400 underline text-xs">EDIT</button>
       </div>
 
-      <button onclick="openPairingModal()" class="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-xl text-xs shadow-[0_0_25px_rgba(0,255,102,0.4)] transition">
-        ENTER PAIRING CODE
+      <button onclick="instantAutoConnect()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-orbitron font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.5)] transition transform hover:scale-[1.02]">
+        ⚡ INSTANT CONNECT (NO CODE NEEDED)
+      </button>
+
+      <button onclick="openPairingModal()" class="mt-3 text-xs font-mono-tech text-emerald-500/80 hover:text-emerald-400 underline">
+        Optional: Enter Manual 6-Digit Code
       </button>
     </div>
 
@@ -211,11 +213,11 @@
     </div>
   </main>
 
-  <!-- Pairing Modal -->
+  <!-- Manual Pairing Modal -->
   <div id="pairing-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-lg flex items-center justify-center z-50 p-4">
     <div class="matrix-panel rounded-3xl p-8 w-full max-w-md">
-      <h3 class="text-xl font-bold font-orbitron text-emerald-400 mb-1">PAIR SMARTPHONE</h3>
-      <p class="text-xs text-slate-400 mb-5 font-mono-tech">Enter the 6-digit code generated on your Android phone app.</p>
+      <h3 class="text-xl font-bold font-orbitron text-emerald-400 mb-1">MANUAL CODE ENTRY</h3>
+      <p class="text-xs text-slate-400 mb-5 font-mono-tech">Optional fallback code entry if auto-connect is disabled.</p>
       
       <input type="text" id="pairing-input" placeholder="SMR-8924" class="w-full px-4 py-3.5 bg-slate-950 border border-emerald-500/40 rounded-2xl text-center text-3xl font-mono-tech font-bold tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-400 mb-5 shadow-[0_0_20px_rgba(0,255,102,0.2)]">
       
@@ -248,13 +250,14 @@
     let ws = null;
     let dataChannel = null;
     let mediaStream = new MediaStream();
+    let pendingIceCandidates = [];
     
-    // Mouse Drag & Touch Gesture Tracking State
     let touchStartX = 0;
     let touchStartY = 0;
     let touchStartTime = 0;
 
     updateServerDisplay();
+    initAutoWebSocket();
 
     function updateServerDisplay() {
       document.getElementById('active-server-label').innerText = activeServerUrl;
@@ -269,6 +272,7 @@
         activeServerUrl = url.replace(/\/$/, "");
         localStorage.setItem('smr_server_url', activeServerUrl);
         updateServerDisplay();
+        initAutoWebSocket();
       }
       closeServerConfigModal();
     }
@@ -277,71 +281,88 @@
     function closePairingModal() { document.getElementById('pairing-modal').classList.add('hidden'); }
     function toggleDiagnostics() { document.getElementById('diagnostics-hud').classList.toggle('hidden'); }
 
-    async function submitPairing() {
-      const code = document.getElementById('pairing-input').value.trim().toUpperCase();
-      if (!code) return;
-      closePairingModal();
-
-      document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
-      document.getElementById('status-text').innerText = 'PAIRING & CONNECTING...';
-
+    function initAutoWebSocket() {
       try {
-        const claimRes = await fetch(`${activeServerUrl}/api/v1/pairing/claim`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pairingCode: code,
-            desktopInfo: { clientName: 'Laptop Web UI', os: 'Browser', appVersion: '1.0.0', browser: navigator.userAgent }
-          })
-        });
-        const claimData = await claimRes.json();
-        if (!claimData.success) {
-          alert('Pairing Error: ' + (claimData.error?.message || 'Invalid pairing code'));
-          return;
-        }
-
-        const desktopJwt = claimData.data.desktopJwt;
-        const pairingSessionId = claimData.data.pairingSessionId;
-
         const wsProtocol = activeServerUrl.startsWith('https') ? 'wss:' : 'ws:';
         const wsHost = activeServerUrl.replace(/^https?:\/\//, '');
         ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/signaling`);
 
         ws.onopen = () => {
-          ws.send(JSON.stringify({ type: 'AUTH_REQUEST', token: desktopJwt, role: 'desktop', deviceId: 'desktop_web' }));
-          ws.send(JSON.stringify({ type: 'PAIR_REQUEST', pairingSessionId: code, desktopName: 'Laptop Web UI' }));
+          document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
+          document.getElementById('status-text').innerText = 'SMARTPHONE AUTO-READY';
+          ws.send(JSON.stringify({ type: 'AUTH_REQUEST', role: 'desktop', deviceId: 'personal_laptop' }));
         };
 
         ws.onmessage = async (event) => {
           const msg = JSON.parse(event.data);
 
-          if (msg.type === 'PAIR_APPROVAL') {
-            document.getElementById('status-text').innerText = 'PAIRING APPROVED! NEGOTIATING WEBRTC...';
+          if (msg.type === 'PHONE_STATUS') {
+            document.getElementById('status-text').innerText = 'PHONE ONLINE (READY TO AUTO-MIRROR)';
+          } else if (msg.type === 'PAIR_APPROVAL') {
+            document.getElementById('status-text').innerText = 'CONNECTING WEBRTC STREAM...';
             initWebRtc(msg.turnServers || []);
           } else if (msg.type === 'SDP_OFFER') {
             if (pc) {
               await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp }));
+              while (pendingIceCandidates.length > 0) {
+                const cand = pendingIceCandidates.shift();
+                await pc.addIceCandidate(cand);
+              }
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
-              ws.send(JSON.stringify({ type: 'SDP_ANSWER', sessionId: pairingSessionId, sdp: answer.sdp }));
+              ws.send(JSON.stringify({ type: 'SDP_ANSWER', sdp: answer.sdp }));
             }
           } else if (msg.type === 'ICE_CANDIDATE' && msg.candidate) {
-            if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            const cand = new RTCIceCandidate(msg.candidate);
+            if (pc && pc.remoteDescription) {
+              await pc.addIceCandidate(cand);
+            } else {
+              pendingIceCandidates.push(cand);
+            }
           }
         };
 
-      } catch (err) {
-        console.error('Pairing error:', err);
-        alert('Connection error: ' + err.message);
+        ws.onclose = () => {
+          setTimeout(initAutoWebSocket, 3000);
+        };
+      } catch (e) {
+        console.error('WebSocket error', e);
       }
     }
 
+    function instantAutoConnect() {
+      document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
+      document.getElementById('status-text').innerText = 'REQUESTING PHONE STREAM...';
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        initAutoWebSocket();
+        setTimeout(instantAutoConnect, 1000);
+        return;
+      }
+
+      ws.send(JSON.stringify({ type: 'AUTO_CONNECT', desktopName: 'Personal Laptop' }));
+    }
+
+    async function submitPairing() {
+      const code = document.getElementById('pairing-input').value.trim().toUpperCase();
+      closePairingModal();
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        initAutoWebSocket();
+        setTimeout(submitPairing, 1000);
+        return;
+      }
+      ws.send(JSON.stringify({ type: 'PAIR_REQUEST', pairingSessionId: code, desktopName: 'Personal Laptop' }));
+    }
+
     function initWebRtc(turnServers) {
-      const iceServers = turnServers.length > 0 ? turnServers : [{ urls: 'stun:stun.l.google.com:19302' }];
+      const iceServers = turnServers.length > 0 ? turnServers : [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' }
+      ];
       pc = new RTCPeerConnection({ iceServers });
 
       pc.ontrack = (event) => {
-        console.log('Video stream track received from Android!');
         mediaStream.addTrack(event.track);
         const video = document.getElementById('remote-video');
         video.srcObject = mediaStream;
@@ -351,12 +372,11 @@
         document.getElementById('android-controls').classList.remove('hidden');
         document.getElementById('android-controls').classList.add('flex');
         document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
-        document.getElementById('status-text').innerText = 'SYSTEM CONNECTED (LIVE STREAM & REMOTE TOUCH)';
+        document.getElementById('status-text').innerText = 'CONNECTED (P2P WEBRTC LIVE MIRROR)';
       };
 
       pc.ondatachannel = (event) => {
         dataChannel = event.channel;
-        console.log('DataChannel connected for remote touch input');
         document.getElementById('hud-dc').innerText = 'ACTIVE (DataChannel Ready)';
       };
 
@@ -366,7 +386,6 @@
         }
       };
 
-      // Mouse Gesture & Touch Input Handlers
       const videoEl = document.getElementById('remote-video');
       
       videoEl.onmousedown = (e) => {
@@ -387,7 +406,6 @@
         const distSq = deltaX * deltaX + deltaY * deltaY;
 
         if (distSq > 0.002) {
-          // Drag detected -> Send Swipe gesture
           sendInputPayload({
             action: 'SWIPE',
             startX: touchStartX,
@@ -397,14 +415,12 @@
             duration: Math.max(150, duration)
           });
         } else if (duration > 500) {
-          // Long press detected
           sendInputPayload({
             action: 'LONG_PRESS',
             normalizedX: touchStartX,
             normalizedY: touchStartY
           });
         } else {
-          // Standard Tap
           sendInputPayload({
             action: 'TAP',
             normalizedX: touchStartX,

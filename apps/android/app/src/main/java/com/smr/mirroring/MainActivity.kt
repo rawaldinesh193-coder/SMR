@@ -28,6 +28,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        viewModel.autoStartPersonalSession(this)
         setContent {
             SMRMirroringApp(this, viewModel)
         }
@@ -57,7 +58,7 @@ fun SMRMirroringApp(activity: Activity, viewModel: MainViewModel) {
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF0F172A)
+        color = Color(0xFF020617)
     ) {
         Column(
             modifier = Modifier
@@ -87,15 +88,15 @@ fun HeaderSection() {
         modifier = Modifier.padding(top = 16.dp)
     ) {
         Text(
-            text = "SMR Mirror",
+            text = "SMR Cyber Mirror",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF38BDF8)
+            color = Color(0xFF00FF66)
         )
         Text(
-            text = "Production Screen Streaming & Remote Control",
+            text = "Personal Instant Screen Mirroring & Touch Remote",
             fontSize = 12.sp,
-            color = Color(0xFF94A3B8)
+            color = Color(0xFF10B981)
         )
     }
 }
@@ -108,8 +109,17 @@ fun IdleContent(viewModel: MainViewModel, uiState: UiState) {
         verticalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth()
     ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .background(Color(0xFF052e16), shape = RoundedCornerShape(36.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("READY", color = Color(0xFF00FF66), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Connect Phone to Computer",
+            text = "Personal Phone Auto-Registered",
             fontSize = 20.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
@@ -117,9 +127,9 @@ fun IdleContent(viewModel: MainViewModel, uiState: UiState) {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Generate a secure QR code or pairing link to stream and control your screen from a laptop.",
-            fontSize = 14.sp,
-            color = Color(0xFFCBD5E1),
+            text = "Open laptop UI at https://smr-kzjz.onrender.com and tap Instant Connect to mirror screen without codes.",
+            fontSize = 13.sp,
+            color = Color(0xFF94A3B8),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
@@ -127,17 +137,17 @@ fun IdleContent(viewModel: MainViewModel, uiState: UiState) {
         Text(
             text = uiState.statusMessage,
             fontSize = 12.sp,
-            color = Color(0xFF38BDF8),
+            color = Color(0xFF10B981),
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = { viewModel.generatePairingSession(context) },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(0.8f).height(50.dp)
+            modifier = Modifier.fillMaxWidth(0.85f).height(50.dp)
         ) {
-            Text("Generate Pairing Code", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("Re-Register Session", fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -149,7 +159,7 @@ fun PairingContent(uiState: UiState) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = "Pairing Code",
+            text = "Personal Code (Optional)",
             fontSize = 14.sp,
             color = Color(0xFF94A3B8)
         )
@@ -158,7 +168,7 @@ fun PairingContent(uiState: UiState) {
             text = uiState.pairingCode,
             fontSize = 36.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF38BDF8),
+            color = Color(0xFF00FF66),
             letterSpacing = 4.sp
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -168,29 +178,13 @@ fun PairingContent(uiState: UiState) {
             color = Color(0xFF10B981),
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(24.dp))
-        Box(
-            modifier = Modifier
-                .size(200.dp)
-                .background(Color.White, shape = RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("[ QR Code Active ]", color = Color.Black, fontWeight = FontWeight.Bold)
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "Enter code on laptop UI at https://smr-kzjz.onrender.com",
-            fontSize = 12.sp,
-            color = Color(0xFF94A3B8),
-            textAlign = TextAlign.Center
-        )
     }
 }
 
 @Composable
 fun ApprovalContent(activity: Activity, viewModel: MainViewModel, uiState: UiState) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF062016)),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -199,14 +193,14 @@ fun ApprovalContent(activity: Activity, viewModel: MainViewModel, uiState: UiSta
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Connection Request",
+                text = "Instant Connection Request",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "${uiState.desktopName} wants to mirror and control this phone.",
+                text = "${uiState.desktopName} wants to stream screen and remote control.",
                 fontSize = 14.sp,
                 color = Color(0xFFCBD5E1),
                 textAlign = TextAlign.Center
@@ -224,10 +218,10 @@ fun ApprovalContent(activity: Activity, viewModel: MainViewModel, uiState: UiSta
                 }
                 Button(
                     onClick = { viewModel.approvePairing(activity) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Allow Connection")
+                    Text("Allow Mirroring", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -246,11 +240,11 @@ fun ConnectedContent(viewModel: MainViewModel, uiState: UiState) {
                 .background(Color(0xFF065F46), shape = RoundedCornerShape(36.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text("LIVE", color = Color(0xFF34D399), fontWeight = FontWeight.Bold)
+            Text("LIVE", color = Color(0xFF00FF66), fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Screen Streaming Active",
+            text = "Personal Mirroring Active",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White
@@ -267,7 +261,7 @@ fun ConnectedContent(viewModel: MainViewModel, uiState: UiState) {
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(0.8f).height(48.dp)
         ) {
-            Text("Revoke Session & Disconnect", fontWeight = FontWeight.Bold)
+            Text("Disconnect Session", fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -277,7 +271,7 @@ fun PermissionBanner(viewModel: MainViewModel, uiState: UiState) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = if (uiState.accessibilityEnabled) Color(0xFF064E3B) else Color(0xFF78350F)
+            containerColor = if (uiState.accessibilityEnabled) Color(0xFF052e16) else Color(0xFF78350F)
         ),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
@@ -289,7 +283,7 @@ fun PermissionBanner(viewModel: MainViewModel, uiState: UiState) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (uiState.accessibilityEnabled) "Remote Control Enabled" else "Control Needs Permission",
+                    text = if (uiState.accessibilityEnabled) "Remote Touch Active" else "Enable Remote Touch",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = Color.White

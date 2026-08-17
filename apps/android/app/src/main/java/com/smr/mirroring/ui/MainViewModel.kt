@@ -15,6 +15,7 @@ import com.smr.mirroring.network.SignalingClient
 import com.smr.mirroring.service.MediaProjectionService
 import com.smr.mirroring.service.RemoteAccessibilityService
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,10 +38,10 @@ data class UiState(
     val appState: AppState = AppState.IDLE,
     val pairingCode: String = "",
     val pairingUrl: String = "",
-    val desktopName: String = "",
-    val statusMessage: String = "Ready to pair",
+    val desktopName: String = "Personal Laptop",
+    val statusMessage: String = "Ready for Instant Connection",
     val accessibilityEnabled: Boolean = false,
-    val pairingSessionId: String = "",
+    val pairingSessionId: String = "personal_session",
     val androidJwt: String = ""
 )
 
@@ -61,30 +62,24 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(accessibilityEnabled = accEnabled)
     }
 
-    fun generatePairingSession(context: Context) {
+    fun autoStartPersonalSession(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        statusMessage = "Connecting to Render server..."
-                    )
-                }
-
                 val serverUrl = ServerConfigManager(context).getServerUrl()
                 val apiUrl = URL("$serverUrl/api/v1/pairing/create")
                 val connection = (apiUrl.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json")
                     doOutput = true
-                    connectTimeout = 10000
-                    readTimeout = 10000
+                    connectTimeout = 5000
+                    readTimeout = 5000
                 }
 
                 val jsonBody = JSONObject().apply {
                     put("deviceInfo", JSONObject().apply {
-                        put("deviceId", android.os.Build.MODEL)
+                        put("deviceId", "personal_phone")
                         put("brand", android.os.Build.BRAND)
-                        put("fingerprint", android.os.Build.FINGERPRINT)
+                        put("model", android.os.Build.MODEL)
                     })
                 }
 
@@ -93,43 +88,33 @@ class MainViewModel : ViewModel() {
                 }
 
                 val responseCode = connection.responseCode
-                if (responseCode == 201 || responseCode == 200) {
+                if (responseCode == 200 || responseCode == 201) {
                     val responseStr = connection.inputStream.bufferedReader().use { it.readText() }
                     val resJson = JSONObject(responseStr)
                     val data = resJson.getJSONObject("data")
 
                     val pairingCode = data.getString("pairingCode")
                     val pairingSessionId = data.getString("pairingSessionId")
-                    val pairingUrl = data.optString("pairingUrl", "$serverUrl/pair?code=$pairingCode")
                     val androidJwt = data.optString("androidJwt", "")
 
                     withContext(Dispatchers.Main) {
                         _uiState.value = _uiState.value.copy(
-                            appState = AppState.PAIRING,
                             pairingCode = pairingCode,
-                            pairingUrl = pairingUrl,
                             pairingSessionId = pairingSessionId,
                             androidJwt = androidJwt,
-                            statusMessage = "Pairing Code Active. Enter code on laptop UI."
+                            statusMessage = "Personal Phone Registered. Open Laptop UI to Connect."
                         )
                         connectSignaling(serverUrl, androidJwt, pairingSessionId)
                     }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        _uiState.value = _uiState.value.copy(
-                            statusMessage = "Server returned $responseCode. Retrying..."
-                        )
-                    }
                 }
             } catch (e: Exception) {
-                Log.e("MainViewModel", "Error creating online pairing session", e)
-                withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        statusMessage = "Network error connecting to Render backend."
-                    )
-                }
+                Log.e("MainViewModel", "Error in auto-start personal session", e)
             }
         }
+    }
+
+    fun generatePairingSession(context: Context) {
+        autoStartPersonalSession(context)
     }
 
     private fun connectSignaling(serverUrl: String, jwtToken: String, sessionId: String) {
@@ -143,7 +128,7 @@ class MainViewModel : ViewModel() {
                 val type = json.optString("type")
                 when (type) {
                     "PAIR_REQUEST" -> {
-                        val desktopName = json.optString("desktopName", "Laptop Client")
+                        val desktopName = json.optString("desktopName", "Personal Laptop")
                         viewModelScope.launch(Dispatchers.Main) {
                             onPairingRequested(desktopName)
                         }
@@ -171,7 +156,7 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             appState = AppState.WAITING_APPROVAL,
             desktopName = desktopName,
-            statusMessage = "$desktopName wants to connect"
+            statusMessage = "$desktopName is connecting..."
         )
     }
 
@@ -202,7 +187,10 @@ class MainViewModel : ViewModel() {
             webRtcMediaManager = WebRtcMediaManager(context)
 
             val iceServers = listOf(
-                PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+                PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+                PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+                PeerConnection.IceServer.builder("stun:stun2.l.google.com:19302").createIceServer(),
+                PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer()
             )
 
             webRtcMediaManager?.startWebRtcSession(
@@ -240,7 +228,7 @@ class MainViewModel : ViewModel() {
 
             _uiState.value = _uiState.value.copy(
                 appState = AppState.CONNECTED,
-                statusMessage = "Screen streaming live to ${_uiState.value.desktopName}"
+                statusMessage = "Live Stream Active to ${_uiState.value.desktopName}"
             )
         } catch (e: Exception) {
             Log.e("MainViewModel", "Error starting WebRTC media session", e)

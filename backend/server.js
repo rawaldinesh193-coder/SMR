@@ -17,33 +17,59 @@ const TURN_SECRET = process.env.TURN_SHARED_SECRET || 'coturn_shared_secret_key_
 const STUN_URL = process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302';
 const TURN_URL = process.env.TURN_SERVER_URL || 'turn:localhost:3478';
 
-// Zero-Database In-Memory Session Store with Direct Peer Mapping & Flexible Code Lookup
+// Zero-Database In-Memory Session Store with Direct Peer Mapping & Resilient Personal Auto-Connect
 class InMemoryStore {
   constructor() {
     this.clients = new Map();
     this.pairingSessions = new Map();
     this.peerPairs = new Map();
+    this.latestAndroidWs = null;
+    this.latestDesktopWs = null;
   }
 
   registerClient(client) {
     this.clients.set(client.id, client);
+    if (client.role === 'android') {
+      this.latestAndroidWs = client.ws;
+    } else if (client.role === 'desktop') {
+      this.latestDesktopWs = client.ws;
+    }
   }
 
   unregisterClient(clientId) {
+    const client = this.clients.get(clientId);
+    if (client) {
+      if (this.latestAndroidWs === client.ws) this.latestAndroidWs = null;
+      if (this.latestDesktopWs === client.ws) this.latestDesktopWs = null;
+      this.peerPairs.delete(client.ws);
+    }
     this.clients.delete(clientId);
   }
 
-  findAndroidByDeviceId(deviceId) {
+  getLatestAndroid() {
+    if (this.latestAndroidWs && this.latestAndroidWs.readyState === 1) {
+      return this.latestAndroidWs;
+    }
     for (const client of this.clients.values()) {
-      if (client.role === 'android') {
-        if (!deviceId || client.deviceId === deviceId) {
-          return client;
-        }
+      if (client.role === 'android' && client.ws && client.ws.readyState === 1) {
+        this.latestAndroidWs = client.ws;
+        return client.ws;
       }
     }
-    // Return latest active android client as resilient fallback
-    const androids = Array.from(this.clients.values()).filter(c => c.role === 'android');
-    return androids.length > 0 ? androids[androids.length - 1] : undefined;
+    return null;
+  }
+
+  getLatestDesktop() {
+    if (this.latestDesktopWs && this.latestDesktopWs.readyState === 1) {
+      return this.latestDesktopWs;
+    }
+    for (const client of this.clients.values()) {
+      if (client.role === 'desktop' && client.ws && client.ws.readyState === 1) {
+        this.latestDesktopWs = client.ws;
+        return client.ws;
+      }
+    }
+    return null;
   }
 
   createPairingSession(data) {
@@ -85,15 +111,10 @@ class InMemoryStore {
   getTargetPeer(ws) {
     return this.peerPairs.get(ws);
   }
-
-  removePairingSession(id) {
-    this.pairingSessions.delete(id);
-  }
 }
 
 const store = new InMemoryStore();
 
-// Helper Functions
 function generatePairingCode() {
   const digits = crypto.randomInt(1000, 9999);
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -103,7 +124,7 @@ function generatePairingCode() {
 }
 
 function generateTurnCredentials(usernameSuffix = 'user') {
-  const timestamp = Math.floor(Date.now() / 1000) + 86400; // 24 hours
+  const timestamp = Math.floor(Date.now() / 1000) + 86400;
   const username = `${timestamp}:${usernameSuffix}`;
   const hmac = crypto.createHmac('sha1', TURN_SECRET);
   hmac.update(username);
@@ -118,7 +139,6 @@ function generateTurnCredentials(usernameSuffix = 'user') {
   ];
 }
 
-// Fastify App Setup
 const fastify = Fastify({ logger: { level: 'info' } });
 
 async function start() {
@@ -126,36 +146,28 @@ async function start() {
   await fastify.register(rateLimit, { max: 500, timeWindow: '1 minute' });
   await fastify.register(websocket, { options: { maxPayload: 1048576 } });
 
-  // Root Welcome & Health Routes
   fastify.get('/', async () => ({
     status: 'online',
-    service: 'SMR Mirror WebRTC Signaling Gateway',
-    version: '1.0.0',
-    mode: 'zero_database_in_memory',
-    healthCheck: '/api/v1/health',
+    service: 'SMR Mirror Personal WebRTC Signaling Gateway',
+    version: '2.0.0',
+    mode: 'personal_auto_connect',
     websocketSignaling: '/ws/signaling'
   }));
 
   fastify.get('/api/v1/health', async () => ({
     status: 'ok',
-    service: 'SMR Standalone WebRTC Signaling Backend',
-    mode: 'zero_database_in_memory',
+    service: 'SMR Personal WebRTC Signaling Backend',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   }));
 
-  fastify.get('/api/v1/ready', async () => ({
-    status: 'ready',
-    mode: 'zero_database_in_memory'
-  }));
-
   fastify.post('/api/v1/pairing/create', async (req, reply) => {
     const { deviceInfo } = req.body || {};
-    const dbDeviceId = deviceInfo?.deviceId || crypto.randomUUID();
-    const pairingSessionId = crypto.randomUUID();
+    const dbDeviceId = deviceInfo?.deviceId || 'personal_phone';
+    const pairingSessionId = 'personal_session_' + crypto.randomUUID();
     const pairingCode = generatePairingCode();
     const pairingToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = Date.now() + 30 * 60 * 1000; // 30 mins
+    const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
 
     store.createPairingSession({
       pairingSessionId,
@@ -167,16 +179,7 @@ async function start() {
       deviceInfo
     });
 
-    const hostHeader = req.headers.host || 'localhost:4000';
-    const protocol = req.protocol || 'http';
-    const pairingUrl = `${protocol}://${hostHeader}/pair?token=${pairingToken}`;
-    const qrCodeUrl = await QRCode.toDataURL(pairingUrl);
-
-    const androidJwt = jwt.sign({
-      deviceId: dbDeviceId,
-      fingerprint: deviceInfo?.fingerprint || 'android_device',
-      role: 'android'
-    }, JWT_SECRET, { expiresIn: '24h' });
+    const androidJwt = jwt.sign({ deviceId: dbDeviceId, role: 'android' }, JWT_SECRET, { expiresIn: '7d' });
 
     return reply.status(201).send({
       success: true,
@@ -184,8 +187,6 @@ async function start() {
         pairingSessionId,
         pairingCode,
         pairingToken,
-        pairingUrl,
-        qrCodeUrl,
         expiresAt: new Date(expiresAt).toISOString(),
         androidJwt,
         deviceInfo
@@ -194,23 +195,17 @@ async function start() {
   });
 
   fastify.post('/api/v1/pairing/claim', async (req, reply) => {
-    const { pairingCode, pairingToken, desktopInfo } = req.body || {};
-    const lookup = pairingToken || pairingCode;
-    const session = store.getPairingByCodeOrToken(lookup);
+    const { pairingCode, desktopInfo } = req.body || {};
+    const session = store.getPairingByCodeOrToken(pairingCode) || Array.from(store.pairingSessions.values())[0] || {
+      pairingSessionId: 'personal_session_default',
+      deviceId: 'personal_phone'
+    };
 
-    if (!session) {
-      return reply.status(404).send({
-        success: false,
-        error: { code: 'EXPIRED', message: 'Pairing code is invalid or expired. Please generate a new code on your phone.' }
-      });
-    }
-
-    session.desktopInfo = desktopInfo;
     const desktopJwt = jwt.sign({
       deviceId: session.deviceId,
       role: 'desktop',
       sessionId: session.pairingSessionId
-    }, JWT_SECRET, { expiresIn: '24h' });
+    }, JWT_SECRET, { expiresIn: '7d' });
 
     return reply.status(200).send({
       success: true,
@@ -223,45 +218,9 @@ async function start() {
     });
   });
 
-  fastify.post('/api/v1/pairing/approve', async (req, reply) => {
-    const { pairingSessionId, approved } = req.body || {};
-    const session = store.getPairingSession(pairingSessionId);
-
-    if (!session) {
-      return reply.status(404).send({ success: false, error: { message: 'Session not found' } });
-    }
-
-    if (!approved) {
-      store.removePairingSession(pairingSessionId);
-      return reply.status(200).send({ success: true, data: { status: 'REJECTED' } });
-    }
-
-    const sessionToken = jwt.sign({
-      deviceId: session.deviceId,
-      role: 'android',
-      sessionId: pairingSessionId
-    }, JWT_SECRET, { expiresIn: '7d' });
-
-    const turnServers = generateTurnCredentials(session.deviceId);
-
-    return reply.status(200).send({
-      success: true,
-      data: {
-        pairingSessionId,
-        sessionToken,
-        turnServers,
-        status: 'APPROVED'
-      }
-    });
-  });
-
-  // WebSocket Signaling Gateway with Cross-Version Fastify Connection Unwrapping
   fastify.get('/ws/signaling', { websocket: true }, (connection) => {
     const socket = connection?.socket || connection?.raw || connection;
-    if (!socket || typeof socket.on !== 'function') {
-      fastify.log.error('Invalid WebSocket connection object received');
-      return;
-    }
+    if (!socket || typeof socket.on !== 'function') return;
 
     let clientId = null;
     let role = null;
@@ -283,67 +242,57 @@ async function start() {
 
         switch (msg.type) {
           case 'AUTH_REQUEST': {
-            try {
-              const decoded = jwt.verify(msg.token, JWT_SECRET);
-              clientId = `${decoded.role}_${decoded.deviceId}_${Date.now()}`;
-              role = decoded.role;
-              deviceId = decoded.deviceId;
+            role = msg.role || 'desktop';
+            deviceId = msg.deviceId || (role === 'android' ? 'personal_phone' : 'personal_laptop');
+            clientId = `${role}_${deviceId}_${Date.now()}`;
 
-              store.registerClient({ id: clientId, role, deviceId, ws: socket });
-              safeSend(socket, { type: 'AUTH_RESPONSE', success: true });
-            } catch (err) {
-              // Resilient auth fallback for web/android clients
-              clientId = `guest_${msg.role || 'client'}_${Date.now()}`;
-              role = msg.role || 'desktop';
-              deviceId = msg.deviceId || 'device';
-              store.registerClient({ id: clientId, role, deviceId, ws: socket });
-              safeSend(socket, { type: 'AUTH_RESPONSE', success: true });
+            store.registerClient({ id: clientId, role, deviceId, ws: socket });
+            safeSend(socket, { type: 'AUTH_RESPONSE', success: true });
+
+            // Notify laptop if Android phone is already connected
+            if (role === 'desktop') {
+              const androidWs = store.getLatestAndroid();
+              if (androidWs) {
+                store.linkPeers(socket, androidWs);
+                safeSend(socket, { type: 'PHONE_STATUS', status: 'ONLINE', message: 'Personal phone ready for instant streaming' });
+              }
+            } else if (role === 'android') {
+              const desktopWs = store.getLatestDesktop();
+              if (desktopWs) {
+                store.linkPeers(socket, desktopWs);
+                safeSend(desktopWs, { type: 'PHONE_STATUS', status: 'ONLINE', message: 'Personal phone ready for instant streaming' });
+              }
             }
             break;
           }
 
+          case 'AUTO_CONNECT':
           case 'PAIR_REQUEST': {
-            const session = store.getPairingByCodeOrToken(msg.pairingSessionId) || store.getPairingSession(msg.pairingSessionId);
-            const android = store.findAndroidByDeviceId(session?.deviceId);
-            
-            if (session) session.desktopWs = socket;
-
-            if (android && android.ws) {
-              store.linkPeers(socket, android.ws);
-              safeSend(android.ws, {
+            const androidWs = store.getLatestAndroid();
+            if (androidWs) {
+              store.linkPeers(socket, androidWs);
+              safeSend(androidWs, {
                 type: 'PAIR_REQUEST',
-                pairingSessionId: session ? session.pairingSessionId : msg.pairingSessionId,
-                desktopName: msg.desktopName || 'Laptop Client'
+                pairingSessionId: msg.pairingSessionId || 'personal_session',
+                desktopName: msg.desktopName || 'Personal Laptop'
               });
             } else {
-              safeSend(socket, { type: 'ERROR', message: 'Connecting to smartphone...' });
+              safeSend(socket, { type: 'ERROR', message: 'Smartphone is offline. Open SMR app on phone.' });
             }
             break;
           }
 
           case 'PAIR_APPROVAL': {
-            const session = store.getPairingSession(msg.pairingSessionId);
-            const turnServers = generateTurnCredentials(session ? session.deviceId : 'device');
-            
-            if (session && session.desktopWs) {
-              store.linkPeers(socket, session.desktopWs);
-              safeSend(session.desktopWs, {
+            const turnServers = generateTurnCredentials('personal_device');
+            const targetWs = store.getTargetPeer(socket) || store.getLatestDesktop();
+            if (targetWs) {
+              store.linkPeers(socket, targetWs);
+              safeSend(targetWs, {
                 type: 'PAIR_APPROVAL',
-                pairingSessionId: msg.pairingSessionId,
+                pairingSessionId: msg.pairingSessionId || 'personal_session',
                 approved: true,
                 turnServers
               });
-            } else {
-              // Resilient broadcast to paired target
-              const target = store.getTargetPeer(socket);
-              if (target) {
-                safeSend(target, {
-                  type: 'PAIR_APPROVAL',
-                  pairingSessionId: msg.pairingSessionId,
-                  approved: true,
-                  turnServers
-                });
-              }
             }
             break;
           }
@@ -352,18 +301,13 @@ async function start() {
           case 'SDP_ANSWER':
           case 'ICE_CANDIDATE':
           case 'REMOTE_INPUT': {
-            const targetWs = store.getTargetPeer(socket);
+            let targetWs = store.getTargetPeer(socket);
+            if (!targetWs || targetWs.readyState !== 1) {
+              targetWs = role === 'android' ? store.getLatestDesktop() : store.getLatestAndroid();
+              if (targetWs) store.linkPeers(socket, targetWs);
+            }
             if (targetWs) {
               safeSend(targetWs, msg);
-            } else {
-              const session = store.getPairingSession(msg.sessionId || msg.pairingSessionId);
-              if (session) {
-                const target = role === 'android' ? session.desktopWs : store.findAndroidByDeviceId(session.deviceId)?.ws;
-                if (target) {
-                  store.linkPeers(socket, target);
-                  safeSend(target, msg);
-                }
-              }
             }
             break;
           }
@@ -384,7 +328,7 @@ async function start() {
   });
 
   await fastify.listen({ port: PORT, host: HOST });
-  console.log(`[Backend] SMR Standalone Signaling Backend running on http://${HOST}:${PORT}`);
+  console.log(`[Backend] Personal WebRTC Gateway running on http://${HOST}:${PORT}`);
 }
 
 start();
