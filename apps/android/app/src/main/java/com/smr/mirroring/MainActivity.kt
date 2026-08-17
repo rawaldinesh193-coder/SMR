@@ -1,5 +1,7 @@
 package com.smr.mirroring
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,7 +29,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            SMRMirroringApp(viewModel)
+            SMRMirroringApp(this, viewModel)
         }
     }
 
@@ -35,10 +37,22 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         viewModel.checkPermissions()
     }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 9001) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                viewModel.onScreenCaptureConsentGranted(this, resultCode, data)
+            } else {
+                viewModel.denyPairing()
+            }
+        }
+    }
 }
 
 @Composable
-fun SMRMirroringApp(viewModel: MainViewModel) {
+fun SMRMirroringApp(activity: Activity, viewModel: MainViewModel) {
     val uiState by viewModel.uiState.collectAsState()
 
     Surface(
@@ -57,7 +71,7 @@ fun SMRMirroringApp(viewModel: MainViewModel) {
             when (uiState.appState) {
                 AppState.IDLE -> IdleContent(viewModel, uiState)
                 AppState.PAIRING -> PairingContent(uiState)
-                AppState.WAITING_APPROVAL -> ApprovalContent(viewModel, uiState)
+                AppState.WAITING_APPROVAL -> ApprovalContent(activity, viewModel, uiState)
                 AppState.CONNECTED -> ConnectedContent(viewModel, uiState)
             }
 
@@ -174,7 +188,7 @@ fun PairingContent(uiState: UiState) {
 }
 
 @Composable
-fun ApprovalContent(viewModel: MainViewModel, uiState: UiState) {
+fun ApprovalContent(activity: Activity, viewModel: MainViewModel, uiState: UiState) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
         shape = RoundedCornerShape(16.dp),
@@ -209,7 +223,7 @@ fun ApprovalContent(viewModel: MainViewModel, uiState: UiState) {
                     Text("Deny", color = Color(0xFFEF4444))
                 }
                 Button(
-                    onClick = { viewModel.approvePairing() },
+                    onClick = { viewModel.approvePairing(activity) },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                     shape = RoundedCornerShape(8.dp)
                 ) {

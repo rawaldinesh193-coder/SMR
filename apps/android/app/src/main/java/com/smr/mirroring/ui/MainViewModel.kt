@@ -1,13 +1,17 @@
 package com.smr.mirroring.ui
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smr.mirroring.data.ServerConfigManager
+import com.smr.mirroring.media.WebRtcMediaManager
 import com.smr.mirroring.network.SignalingClient
+import com.smr.mirroring.service.MediaProjectionService
 import com.smr.mirroring.service.RemoteAccessibilityService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +20,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.webrtc.PeerConnection
+import org.webrtc.ScreenCapturerAndroid
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -43,6 +49,7 @@ class MainViewModel : ViewModel() {
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var signalingClient: SignalingClient? = null
+    private var webRtcMediaManager: WebRtcMediaManager? = null
 
     init {
         checkPermissions()
@@ -140,6 +147,19 @@ class MainViewModel : ViewModel() {
                             onPairingRequested(desktopName)
                         }
                     }
+                    "SDP_ANSWER" -> {
+                        val sdp = json.optString("sdp")
+                        webRtcMediaManager?.setRemoteAnswer(sdp)
+                    }
+                    "ICE_CANDIDATE" -> {
+                        val candidateObj = json.optJSONObject("candidate")
+                        if (candidateObj != null) {
+                            val mid = candidateObj.optString("sdpMid", "")
+                            val mLineIndex = candidateObj.optInt("sdpMLineIndex", 0)
+                            val sdp = candidateObj.optString("candidate", "")
+                            webRtcMediaManager?.addRemoteIceCandidate(mid, mLineIndex, sdp)
+                        }
+                    }
                 }
             }
             connect(jwtToken)
@@ -154,18 +174,65 @@ class MainViewModel : ViewModel() {
         )
     }
 
-    fun approvePairing() {
-        val sessionId = _uiState.value.pairingSessionId
+    fun approvePairing(activity: Activity) {
+        val projectionManager = activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        activity.startActivityForResult(projectionManager.createScreenCaptureIntent(), 9001)
+    }
+
+    fun onScreenCaptureConsentGranted(context: Context, resultCode: Int, data: Intent) {
+        val serviceIntent = Intent(context, MediaProjectionService::class.java).apply {
+            putExtra("EXTRA_RESULT_CODE", resultCode)
+            putExtra("EXTRA_RESULT_DATA", data)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent)
+        } else {
+            context.startService(serviceIntent)
+        }
+
+        val screenCapturer = ScreenCapturerAndroid(data, null)
+        webRtcMediaManager = WebRtcMediaManager(context)
+
+        val iceServers = listOf(
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+        )
+
+        webRtcMediaManager?.startWebRtcSession(
+            capturer = screenCapturer,
+            iceServers = iceServers,
+            onSdpOfferCreated = { sdpOfferStr ->
+                val offerMsg = JSONObject().apply {
+                    put("type", "SDP_OFFER")
+                    put("pairingSessionId", _uiState.value.pairingSessionId)
+                    put("sdp", sdpOfferStr)
+                }
+                signalingClient?.sendMessage(offerMsg)
+            },
+            onIceCandidateGenerated = { candidate ->
+                val candObj = JSONObject().apply {
+                    put("sdpMid", candidate.sdpMid)
+                    put("sdpMLineIndex", candidate.sdpMLineIndex)
+                    put("candidate", candidate.sdp)
+                }
+                val iceMsg = JSONObject().apply {
+                    put("type", "ICE_CANDIDATE")
+                    put("pairingSessionId", _uiState.value.pairingSessionId)
+                    put("candidate", candObj)
+                }
+                signalingClient?.sendMessage(iceMsg)
+            }
+        )
+
         val approvalMsg = JSONObject().apply {
             put("type", "PAIR_APPROVAL")
-            put("pairingSessionId", sessionId)
+            put("pairingSessionId", _uiState.value.pairingSessionId)
             put("approved", true)
         }
         signalingClient?.sendMessage(approvalMsg)
 
         _uiState.value = _uiState.value.copy(
             appState = AppState.CONNECTED,
-            statusMessage = "Connected and streaming to ${_uiState.value.desktopName}"
+            statusMessage = "Screen streaming live to ${_uiState.value.desktopName}"
         )
     }
 
@@ -188,6 +255,8 @@ class MainViewModel : ViewModel() {
     fun disconnectSession() {
         signalingClient?.disconnect()
         signalingClient = null
+        webRtcMediaManager?.close()
+        webRtcMediaManager = null
         _uiState.value = _uiState.value.copy(
             appState = AppState.IDLE,
             pairingCode = "",
