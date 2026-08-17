@@ -149,20 +149,20 @@ async function start() {
   fastify.get('/', async () => ({
     status: 'online',
     service: 'SMR Mirror Personal WebRTC Signaling Gateway',
-    version: '2.0.0',
-    mode: 'personal_auto_connect',
+    version: '2.5.0',
+    mode: 'browser_and_app_hybrid_streaming',
     websocketSignaling: '/ws/signaling',
     connectDeepLink: '/connect'
   }));
 
   fastify.get('/api/v1/health', async () => ({
     status: 'ok',
-    service: 'SMR Personal WebRTC Signaling Backend',
+    service: 'SMR Hybrid WebRTC Signaling Backend',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   }));
 
-  // Deep Link Launch Landing Page Route
+  // Hybrid Web & Native App One-Click Connect Landing Route
   fastify.get('/connect', async (req, reply) => {
     reply.type('text/html').send(`
       <!DOCTYPE html>
@@ -170,21 +170,98 @@ async function start() {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SMR Cyber Mirror — One-Click Instant Connect</title>
+        <title>SMR Cyber Mirror — Web Screen Streamer</title>
         <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
       </head>
-      <body class="bg-slate-950 text-slate-100 flex flex-col items-center justify-center h-screen p-6 text-center">
-        <div class="max-w-md p-8 bg-slate-900/90 border border-emerald-500/40 rounded-3xl shadow-[0_0_30px_rgba(0,255,102,0.2)]">
-          <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-2xl">⚡</div>
-          <h1 class="text-2xl font-bold text-emerald-400 mb-2">SMR Magic Connect Link</h1>
-          <p class="text-xs text-slate-400 mb-6">Tap the button below to launch SMR Mirror app and instantly start screen mirroring to your laptop.</p>
-          <a href="smrmirror://connect" class="block w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-2xl text-sm shadow-lg transition">
-            🚀 OPEN SMR APP & START MIRRORING
+      <body class="bg-slate-950 text-slate-100 flex flex-col items-center justify-center h-screen p-6 text-center select-none font-mono">
+
+        <div class="max-w-md w-full p-8 bg-slate-900/90 border border-emerald-500/40 rounded-3xl shadow-[0_0_35px_rgba(0,255,102,0.25)]">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-3xl animate-pulse">⚡</div>
+          <h1 class="text-2xl font-bold text-emerald-400 mb-2 font-orbitron">SMR CYBER STREAMER</h1>
+          <p class="text-xs text-slate-400 mb-6 leading-relaxed">
+            No app installed? Stream your phone screen directly from this browser to your laptop in 1 tap.
+          </p>
+
+          <button id="web-stream-btn" onclick="startWebBrowserScreenStream()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.4)] transition transform active:scale-95 mb-4">
+            ⚡ STREAM SCREEN IN BROWSER (NO APP NEEDED)
+          </button>
+
+          <a href="smrmirror://connect" class="block text-xs text-emerald-400/80 hover:text-emerald-300 underline">
+            Or Open Installed Native SMR Android App
           </a>
         </div>
+
         <script>
-          // Auto-trigger deep link open
-          window.location.href = "smrmirror://connect";
+          let ws = null;
+          let pc = null;
+
+          // Try launching native Android app if installed
+          setTimeout(() => {
+            window.location.href = "smrmirror://connect";
+          }, 300);
+
+          async function startWebBrowserScreenStream() {
+            const btn = document.getElementById('web-stream-btn');
+            btn.innerText = "REQUESTING BROWSER SCREEN PERMISSION...";
+
+            try {
+              const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { cursor: "always" },
+                audio: false
+              });
+
+              btn.innerText = "CONNECTING WEBRTC TO LAPTOP...";
+
+              const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+              ws = new WebSocket(\`\${wsProtocol}//\${window.location.host}/ws/signaling\`);
+
+              ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'AUTH_REQUEST', role: 'android', deviceId: 'browser_mobile_phone' }));
+              };
+
+              ws.onmessage = async (event) => {
+                const msg = JSON.parse(event.data);
+
+                if (msg.type === 'AUTH_RESPONSE') {
+                  initWebRtc(stream);
+                } else if (msg.type === 'SDP_ANSWER') {
+                  if (pc) await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
+                } else if (msg.type === 'ICE_CANDIDATE' && msg.candidate) {
+                  if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+                }
+              };
+
+            } catch (err) {
+              console.error("Browser screen capture error", err);
+              alert("Browser screen capture prompt closed or not supported by this browser: " + err.message);
+              btn.innerText = "⚡ STREAM SCREEN IN BROWSER (NO APP NEEDED)";
+            }
+          }
+
+          function initWebRtc(stream) {
+            pc = new RTCPeerConnection({
+              iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' }
+              ]
+            });
+
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+            pc.onicecandidate = (e) => {
+              if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: e.candidate.toJSON() }));
+              }
+            };
+
+            pc.createOffer().then(offer => {
+              pc.setLocalDescription(offer);
+              ws.send(JSON.stringify({ type: 'SDP_OFFER', sdp: offer.sdp, pairingSessionId: 'personal_session' }));
+              document.getElementById('web-stream-btn').innerText = "🟢 STREAMING LIVE TO LAPTOP";
+            });
+          }
         </script>
       </body>
       </html>
@@ -306,7 +383,7 @@ async function start() {
                 desktopName: msg.desktopName || 'Personal Laptop'
               });
             } else {
-              safeSend(socket, { type: 'ERROR', message: 'Smartphone is offline. Open SMR app on phone.' });
+              safeSend(socket, { type: 'ERROR', message: 'Smartphone is offline. Open SMR app on phone or tap browser stream.' });
             }
             break;
           }
