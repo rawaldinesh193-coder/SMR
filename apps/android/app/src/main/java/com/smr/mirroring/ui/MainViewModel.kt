@@ -1,10 +1,13 @@
 package com.smr.mirroring.ui
 
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smr.mirroring.data.ServerConfigManager
+import com.smr.mirroring.network.SignalingClient
 import com.smr.mirroring.service.RemoteAccessibilityService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,11 +23,10 @@ enum class AppState {
     IDLE,
     PAIRING,
     WAITING_APPROVAL,
-    CONNECTED,
-    DISCONNECTED
+    CONNECTED
 }
 
-data class MainUiState(
+data class UiState(
     val appState: AppState = AppState.IDLE,
     val pairingCode: String = "",
     val pairingUrl: String = "",
@@ -37,8 +39,10 @@ data class MainUiState(
 
 class MainViewModel : ViewModel() {
 
-    private val _uiState = MutableStateFlow(MainUiState())
-    val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    private var signalingClient: SignalingClient? = null
 
     init {
         checkPermissions()
@@ -54,7 +58,7 @@ class MainViewModel : ViewModel() {
             try {
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
-                        statusMessage = "Connecting to server..."
+                        statusMessage = "Connecting to Render server..."
                     )
                 }
 
@@ -80,11 +84,12 @@ class MainViewModel : ViewModel() {
                     os.write(jsonBody.toString().toByteArray(Charsets.UTF_8))
                 }
 
-                if (connection.responseCode == 201 || connection.responseCode == 200) {
+                val responseCode = connection.responseCode
+                if (responseCode == 201 || responseCode == 200) {
                     val responseStr = connection.inputStream.bufferedReader().use { it.readText() }
                     val resJson = JSONObject(responseStr)
                     val data = resJson.getJSONObject("data")
-                    
+
                     val pairingCode = data.getString("pairingCode")
                     val pairingSessionId = data.getString("pairingSessionId")
                     val pairingUrl = data.optString("pairingUrl", "$serverUrl/pair?code=$pairingCode")
@@ -99,30 +104,45 @@ class MainViewModel : ViewModel() {
                             androidJwt = androidJwt,
                             statusMessage = "Pairing Code Active. Enter code on laptop UI."
                         )
+                        connectSignaling(serverUrl, androidJwt, pairingSessionId)
                     }
                 } else {
-                    val fallbackCode = "SMR-" + (1000..9999).random()
                     withContext(Dispatchers.Main) {
                         _uiState.value = _uiState.value.copy(
-                            appState = AppState.PAIRING,
-                            pairingCode = fallbackCode,
-                            pairingUrl = "$serverUrl/pair?code=$fallbackCode",
-                            statusMessage = "Offline Mode Pairing Code"
+                            statusMessage = "Server returned $responseCode. Retrying..."
                         )
                     }
                 }
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Error creating online pairing session", e)
-                val fallbackCode = "SMR-" + (1000..9999).random()
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
-                        appState = AppState.PAIRING,
-                        pairingCode = fallbackCode,
-                        pairingUrl = "https://smr-kzjz.onrender.com/pair?code=$fallbackCode",
-                        statusMessage = "Generated Code. Enter code on laptop UI."
+                        statusMessage = "Network error connecting to Render backend."
                     )
                 }
             }
+        }
+    }
+
+    private fun connectSignaling(serverUrl: String, jwtToken: String, sessionId: String) {
+        val wsProtocol = if (serverUrl.startsWith("https")) "wss:" else "ws:"
+        val host = serverUrl.replace(Regex("^https?://"), "").removeSuffix("/")
+        val wsUrl = "$wsProtocol//$host/ws/signaling"
+
+        signalingClient?.disconnect()
+        signalingClient = SignalingClient(wsUrl).apply {
+            onMessageReceived = { json ->
+                val type = json.optString("type")
+                when (type) {
+                    "PAIR_REQUEST" -> {
+                        val desktopName = json.optString("desktopName", "Laptop Client")
+                        viewModelScope.launch(Dispatchers.Main) {
+                            onPairingRequested(desktopName)
+                        }
+                    }
+                }
+            }
+            connect(jwtToken)
         }
     }
 
@@ -135,17 +155,54 @@ class MainViewModel : ViewModel() {
     }
 
     fun approvePairing() {
+        val sessionId = _uiState.value.pairingSessionId
+        val approvalMsg = JSONObject().apply {
+            put("type", "PAIR_APPROVAL")
+            put("pairingSessionId", sessionId)
+            put("approved", true)
+        }
+        signalingClient?.sendMessage(approvalMsg)
+
         _uiState.value = _uiState.value.copy(
             appState = AppState.CONNECTED,
             statusMessage = "Connected and streaming to ${_uiState.value.desktopName}"
         )
     }
 
-    fun disconnect() {
+    fun denyPairing() {
+        val sessionId = _uiState.value.pairingSessionId
+        val denyMsg = JSONObject().apply {
+            put("type", "PAIR_APPROVAL")
+            put("pairingSessionId", sessionId)
+            put("approved", false)
+        }
+        signalingClient?.sendMessage(denyMsg)
+
+        _uiState.value = _uiState.value.copy(
+            appState = AppState.IDLE,
+            pairingCode = "",
+            statusMessage = "Pairing denied"
+        )
+    }
+
+    fun disconnectSession() {
+        signalingClient?.disconnect()
+        signalingClient = null
         _uiState.value = _uiState.value.copy(
             appState = AppState.IDLE,
             pairingCode = "",
             statusMessage = "Disconnected"
         )
+    }
+
+    fun openAccessibilitySettings(context: Context) {
+        try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "Error opening accessibility settings", e)
+        }
     }
 }

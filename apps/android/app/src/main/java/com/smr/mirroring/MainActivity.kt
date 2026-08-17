@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.smr.mirroring.ui.AppState
 import com.smr.mirroring.ui.MainViewModel
+import com.smr.mirroring.ui.UiState
 
 class MainActivity : ComponentActivity() {
 
@@ -51,10 +52,8 @@ fun SMRMirroringApp(viewModel: MainViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header
             HeaderSection()
 
-            // Dynamic Body Content based on AppState
             when (uiState.appState) {
                 AppState.IDLE -> IdleContent(viewModel, uiState)
                 AppState.PAIRING -> PairingContent(uiState)
@@ -62,7 +61,6 @@ fun SMRMirroringApp(viewModel: MainViewModel) {
                 AppState.CONNECTED -> ConnectedContent(viewModel, uiState)
             }
 
-            // Footer / Permission status
             PermissionBanner(viewModel, uiState)
         }
     }
@@ -89,7 +87,8 @@ fun HeaderSection() {
 }
 
 @Composable
-fun IdleContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiState) {
+fun IdleContent(viewModel: MainViewModel, uiState: UiState) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -110,9 +109,16 @@ fun IdleContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiState)
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = uiState.statusMessage,
+            fontSize = 12.sp,
+            color = Color(0xFF38BDF8),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(24.dp))
         Button(
-            onClick = { viewModel.generatePairingSession(viewModel.getApplication()) },
+            onClick = { viewModel.generatePairingSession(context) },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth(0.8f).height(50.dp)
@@ -123,7 +129,7 @@ fun IdleContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiState)
 }
 
 @Composable
-fun PairingContent(uiState: com.smr.mirroring.ui.UiState) {
+fun PairingContent(uiState: UiState) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
@@ -141,6 +147,13 @@ fun PairingContent(uiState: com.smr.mirroring.ui.UiState) {
             color = Color(0xFF38BDF8),
             letterSpacing = 4.sp
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = uiState.statusMessage,
+            fontSize = 12.sp,
+            color = Color(0xFF10B981),
+            textAlign = TextAlign.Center
+        )
         Spacer(modifier = Modifier.height(24.dp))
         Box(
             modifier = Modifier
@@ -148,19 +161,20 @@ fun PairingContent(uiState: com.smr.mirroring.ui.UiState) {
                 .background(Color.White, shape = RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Text("[ QR Code Render ]", color = Color.Black, fontWeight = FontWeight.Bold)
+            Text("[ QR Code Active ]", color = Color.Black, fontWeight = FontWeight.Bold)
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Open laptop browser to pair",
-            fontSize = 14.sp,
-            color = Color(0xFF94A3B8)
+            text = "Enter code on laptop UI at https://smr-kzjz.onrender.com",
+            fontSize = 12.sp,
+            color = Color(0xFF94A3B8),
+            textAlign = TextAlign.Center
         )
     }
 }
 
 @Composable
-fun ApprovalContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiState) {
+fun ApprovalContent(viewModel: MainViewModel, uiState: UiState) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
         shape = RoundedCornerShape(16.dp),
@@ -207,7 +221,7 @@ fun ApprovalContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiSt
 }
 
 @Composable
-fun ConnectedContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiState) {
+fun ConnectedContent(viewModel: MainViewModel, uiState: UiState) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
@@ -245,7 +259,7 @@ fun ConnectedContent(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiS
 }
 
 @Composable
-fun PermissionBanner(viewModel: MainViewModel, uiState: com.smr.mirroring.ui.UiState) {
+fun PermissionBanner(viewModel: MainViewModel, uiState: UiState) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Card(
         colors = CardDefaults.cardColors(
