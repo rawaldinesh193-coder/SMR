@@ -39,7 +39,8 @@ data class UiState(
     val statusMessage: String = "Ready for Connection",
     val accessibilityEnabled: Boolean = false,
     val pairingSessionId: String = "personal_session",
-    val androidJwt: String = ""
+    val androidJwt: String = "",
+    val deviceId: String = ""
 )
 
 class MainViewModel : ViewModel() {
@@ -59,7 +60,18 @@ class MainViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(accessibilityEnabled = accEnabled)
     }
 
+    private fun getUniqueDeviceId(context: Context): String {
+        val androidId = try {
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
+        } catch (e: Exception) { "" }
+        val modelClean = android.os.Build.MODEL.replace(Regex("[^a-zA-Z0-9]"), "_")
+        return "phone_${modelClean}_${androidId.takeLast(6)}"
+    }
+
     fun autoStartPersonalSession(context: Context) {
+        val uniqueDevId = getUniqueDeviceId(context)
+        _uiState.value = _uiState.value.copy(deviceId = uniqueDevId)
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val serverUrl = ServerConfigManager(context).getServerUrl()
@@ -74,7 +86,7 @@ class MainViewModel : ViewModel() {
 
                 val jsonBody = JSONObject().apply {
                     put("deviceInfo", JSONObject().apply {
-                        put("deviceId", "personal_phone")
+                        put("deviceId", uniqueDevId)
                         put("brand", android.os.Build.BRAND)
                         put("model", android.os.Build.MODEL)
                     })
@@ -90,8 +102,8 @@ class MainViewModel : ViewModel() {
                     val resJson = JSONObject(responseStr)
                     val data = resJson.getJSONObject("data")
 
-                    val pairingCode = data.getString("pairingCode")
-                    val pairingSessionId = data.getString("pairingSessionId")
+                    val pairingCode = data.optString("pairingCode", "SMR-88")
+                    val pairingSessionId = data.optString("pairingSessionId", "multi_session")
                     val androidJwt = data.optString("androidJwt", "")
 
                     withContext(Dispatchers.Main) {
@@ -99,9 +111,9 @@ class MainViewModel : ViewModel() {
                             pairingCode = pairingCode,
                             pairingSessionId = pairingSessionId,
                             androidJwt = androidJwt,
-                            statusMessage = "Phone Registered. Ready to stream."
+                            statusMessage = "Phone Registered ($uniqueDevId). Ready to stream."
                         )
-                        connectSignaling(serverUrl, androidJwt, pairingSessionId, context)
+                        connectSignaling(serverUrl, androidJwt, pairingSessionId, uniqueDevId, context)
                     }
                 }
             } catch (e: Exception) {
@@ -114,7 +126,7 @@ class MainViewModel : ViewModel() {
         autoStartPersonalSession(context)
     }
 
-    private fun connectSignaling(serverUrl: String, jwtToken: String, sessionId: String, context: Context) {
+    private fun connectSignaling(serverUrl: String, jwtToken: String, sessionId: String, deviceId: String, context: Context) {
         val wsProtocol = if (serverUrl.startsWith("https")) "wss:" else "ws:"
         val host = serverUrl.replace(Regex("^https?://"), "").removeSuffix("/")
         val wsUrl = "$wsProtocol//$host/ws/signaling"
@@ -211,12 +223,15 @@ class MainViewModel : ViewModel() {
                 PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer()
             )
 
+            val currentDevId = _uiState.value.deviceId.ifEmpty { getUniqueDeviceId(context) }
+
             val sessionStarted = webRtcMediaManager?.startWebRtcSessionWithIntent(
                 projectionData = data,
                 iceServers = iceServers,
                 onSdpOfferCreated = { sdpOfferStr ->
                     val offerMsg = JSONObject().apply {
                         put("type", "SDP_OFFER")
+                        put("deviceId", currentDevId)
                         put("pairingSessionId", _uiState.value.pairingSessionId)
                         put("sdp", sdpOfferStr)
                     }
@@ -230,6 +245,7 @@ class MainViewModel : ViewModel() {
                     }
                     val iceMsg = JSONObject().apply {
                         put("type", "ICE_CANDIDATE")
+                        put("deviceId", currentDevId)
                         put("pairingSessionId", _uiState.value.pairingSessionId)
                         put("candidate", candObj)
                     }
@@ -248,6 +264,7 @@ class MainViewModel : ViewModel() {
 
             val approvalMsg = JSONObject().apply {
                 put("type", "PAIR_APPROVAL")
+                put("deviceId", currentDevId)
                 put("pairingSessionId", _uiState.value.pairingSessionId)
                 put("approved", true)
             }
@@ -255,7 +272,7 @@ class MainViewModel : ViewModel() {
 
             _uiState.value = _uiState.value.copy(
                 appState = AppState.CONNECTED,
-                statusMessage = "Live Stream Active"
+                statusMessage = "Multi-Device Stream Active ($currentDevId)"
             )
         } catch (e: Exception) {
             Log.e("MainViewModel", "Error starting WebRTC media session", e)
@@ -269,6 +286,7 @@ class MainViewModel : ViewModel() {
         val sessionId = _uiState.value.pairingSessionId
         val denyMsg = JSONObject().apply {
             put("type", "PAIR_APPROVAL")
+            put("deviceId", _uiState.value.deviceId)
             put("pairingSessionId", sessionId)
             put("approved", false)
         }

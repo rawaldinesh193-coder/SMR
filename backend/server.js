@@ -17,111 +17,82 @@ const TURN_SECRET = process.env.TURN_SHARED_SECRET || 'coturn_shared_secret_key_
 const STUN_URL = process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302';
 const TURN_URL = process.env.TURN_SERVER_URL || 'turn:localhost:3478';
 
-// Zero-Database In-Memory Session Store with Direct Peer Mapping & Resilient Personal Auto-Connect
-class InMemoryStore {
+// Multi-Device In-Memory Session Store (Supports up to 8 concurrent streams)
+class MultiDeviceStore {
   constructor() {
-    this.clients = new Map();
-    this.pairingSessions = new Map();
-    this.peerPairs = new Map();
-    this.latestAndroidWs = null;
-    this.latestDesktopWs = null;
+    this.clients = new Map(); // socket -> client metadata
+    this.androidDevices = new Map(); // deviceId -> { socket, info, registeredAt }
+    this.desktopClients = new Set(); // Set of desktop sockets
+    this.maxDevices = 8;
   }
 
-  registerClient(client) {
-    this.clients.set(client.id, client);
-    if (client.role === 'android') {
-      this.latestAndroidWs = client.ws;
-    } else if (client.role === 'desktop') {
-      this.latestDesktopWs = client.ws;
+  registerClient(socket, role, deviceId, deviceInfo = {}) {
+    const client = {
+      socket,
+      role,
+      deviceId: deviceId || (role === 'android' ? `device_${Date.now()}` : 'desktop_console'),
+      deviceInfo,
+      registeredAt: Date.now()
+    };
+
+    this.clients.set(socket, client);
+
+    if (role === 'desktop') {
+      this.desktopClients.add(socket);
+    } else if (role === 'android') {
+      if (this.androidDevices.size >= this.maxDevices && !this.androidDevices.has(client.deviceId)) {
+        return { success: false, reason: 'Max 8 devices limit reached' };
+      }
+      this.androidDevices.set(client.deviceId, client);
     }
+
+    this.broadcastDeviceList();
+    return { success: true, deviceId: client.deviceId };
   }
 
-  unregisterClient(clientId) {
-    const client = this.clients.get(clientId);
+  unregisterClient(socket) {
+    const client = this.clients.get(socket);
     if (client) {
-      if (this.latestAndroidWs === client.ws) this.latestAndroidWs = null;
-      if (this.latestDesktopWs === client.ws) this.latestDesktopWs = null;
-      this.peerPairs.delete(client.ws);
+      if (client.role === 'desktop') {
+        this.desktopClients.delete(socket);
+      } else if (client.role === 'android') {
+        this.androidDevices.delete(client.deviceId);
+      }
+      this.clients.delete(socket);
+      this.broadcastDeviceList();
     }
-    this.clients.delete(clientId);
   }
 
-  getLatestAndroid() {
-    if (this.latestAndroidWs && this.latestAndroidWs.readyState === 1) {
-      return this.latestAndroidWs;
-    }
-    for (const client of this.clients.values()) {
-      if (client.role === 'android' && client.ws && client.ws.readyState === 1) {
-        this.latestAndroidWs = client.ws;
-        return client.ws;
+  getAndroidDevice(deviceId) {
+    return this.androidDevices.get(deviceId);
+  }
+
+  getAllAndroidDevices() {
+    return Array.from(this.androidDevices.values()).map(dev => ({
+      deviceId: dev.deviceId,
+      deviceInfo: dev.deviceInfo,
+      online: dev.socket && dev.socket.readyState === 1
+    }));
+  }
+
+  broadcastDeviceList() {
+    const devices = this.getAllAndroidDevices();
+    const payload = JSON.stringify({
+      type: 'DEVICE_LIST_UPDATE',
+      devices,
+      count: devices.length,
+      maxDevices: this.maxDevices
+    });
+
+    for (const desktopSocket of this.desktopClients) {
+      if (desktopSocket && desktopSocket.readyState === 1) {
+        try { desktopSocket.send(payload); } catch (e) {}
       }
     }
-    return null;
-  }
-
-  getLatestDesktop() {
-    if (this.latestDesktopWs && this.latestDesktopWs.readyState === 1) {
-      return this.latestDesktopWs;
-    }
-    for (const client of this.clients.values()) {
-      if (client.role === 'desktop' && client.ws && client.ws.readyState === 1) {
-        this.latestDesktopWs = client.ws;
-        return client.ws;
-      }
-    }
-    return null;
-  }
-
-  createPairingSession(data) {
-    this.pairingSessions.set(data.pairingSessionId, data);
-  }
-
-  getPairingSession(id) {
-    return this.pairingSessions.get(id);
-  }
-
-  getPairingByCodeOrToken(codeOrToken) {
-    if (!codeOrToken) return undefined;
-    const cleanLookup = String(codeOrToken).replace(/[^A-Z0-9]/gi, '').toUpperCase();
-
-    for (const s of this.pairingSessions.values()) {
-      const cleanToken = String(s.pairingToken || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-      const cleanCode = String(s.pairingCode || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-
-      if (cleanToken === cleanLookup || cleanCode === cleanLookup) {
-        return s;
-      }
-    }
-
-    const activeSessions = Array.from(this.pairingSessions.values()).filter(s => Date.now() <= s.expiresAt);
-    if (activeSessions.length > 0) {
-      return activeSessions[activeSessions.length - 1];
-    }
-
-    return undefined;
-  }
-
-  linkPeers(ws1, ws2) {
-    if (ws1 && ws2) {
-      this.peerPairs.set(ws1, ws2);
-      this.peerPairs.set(ws2, ws1);
-    }
-  }
-
-  getTargetPeer(ws) {
-    return this.peerPairs.get(ws);
   }
 }
 
-const store = new InMemoryStore();
-
-function generatePairingCode() {
-  const digits = crypto.randomInt(1000, 9999);
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const char1 = chars[crypto.randomInt(0, chars.length)];
-  const char2 = chars[crypto.randomInt(0, chars.length)];
-  return `${char1}${char2}-${digits}`;
-}
+const store = new MultiDeviceStore();
 
 function generateTurnCredentials(usernameSuffix = 'user') {
   const timestamp = Math.floor(Date.now() / 1000) + 86400;
@@ -148,21 +119,24 @@ async function start() {
 
   fastify.get('/', async () => ({
     status: 'online',
-    service: 'SMR Mirror Personal WebRTC Signaling Gateway',
-    version: '2.5.0',
-    mode: 'browser_and_app_hybrid_streaming',
+    service: 'SMR Multi-Device WebRTC Signaling Gateway (8 Devices)',
+    version: '3.0.0',
+    mode: 'multi_device_matrix_streaming',
+    maxConcurrentDevices: 8,
     websocketSignaling: '/ws/signaling',
     connectDeepLink: '/connect'
   }));
 
   fastify.get('/api/v1/health', async () => ({
     status: 'ok',
-    service: 'SMR Hybrid WebRTC Signaling Backend',
+    service: 'SMR 8-Device WebRTC Signaling Backend',
+    activeDevices: store.androidDevices.size,
+    maxDevices: 8,
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
   }));
 
-  // Hybrid Web & Native App One-Click Connect Landing Route
+  // Hybrid Web Screen Streamer Landing Page
   fastify.get('/connect', async (req, reply) => {
     reply.type('text/html').send(`
       <!DOCTYPE html>
@@ -170,7 +144,7 @@ async function start() {
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>SMR Cyber Mirror — Web Screen Streamer</title>
+        <title>SMR Cyber Streamer — Multi-Device Web Streamer</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
       </head>
@@ -178,13 +152,13 @@ async function start() {
 
         <div class="max-w-md w-full p-8 bg-slate-900/90 border border-emerald-500/40 rounded-3xl shadow-[0_0_35px_rgba(0,255,102,0.25)]">
           <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-3xl animate-pulse">⚡</div>
-          <h1 class="text-2xl font-bold text-emerald-400 mb-2 font-orbitron">SMR CYBER STREAMER</h1>
+          <h1 class="text-2xl font-bold text-emerald-400 mb-2 font-orbitron">MULTI-STREAM CONNECTOR</h1>
           <p class="text-xs text-slate-400 mb-6 leading-relaxed">
-            No app installed? Stream your phone screen directly from this browser to your laptop in 1 tap.
+            Connect this device to the laptop matrix console (Up to 8 devices simultaneously).
           </p>
 
-          <button id="web-stream-btn" onclick="startWebBrowserScreenStream()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.4)] transition transform active:scale-95 mb-4">
-            ⚡ STREAM SCREEN IN BROWSER (NO APP NEEDED)
+          <button id="web-stream-btn" onclick="startWebBrowserScreenStream()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-2xl text-sm shadow-[0_0_30px_rgba(0,255,102,0.4)] transition transform active:scale-95 mb-4 font-orbitron">
+            STREAM SCREEN TO CONSOLE
           </button>
 
           <a href="smrmirror://connect" class="block text-xs text-emerald-400/80 hover:text-emerald-300 underline">
@@ -195,15 +169,15 @@ async function start() {
         <script>
           let ws = null;
           let pc = null;
+          const deviceId = "browser_phone_" + Math.floor(1000 + Math.random() * 9000);
 
-          // Try launching native Android app if installed
           setTimeout(() => {
             window.location.href = "smrmirror://connect";
           }, 300);
 
           async function startWebBrowserScreenStream() {
             const btn = document.getElementById('web-stream-btn');
-            btn.innerText = "REQUESTING BROWSER SCREEN PERMISSION...";
+            btn.innerText = "REQUESTING SCREEN PERMISSION...";
 
             try {
               const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -211,13 +185,18 @@ async function start() {
                 audio: false
               });
 
-              btn.innerText = "CONNECTING WEBRTC TO LAPTOP...";
+              btn.innerText = "CONNECTING WEBRTC MULTI-STREAM...";
 
               const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
               ws = new WebSocket(\`\${wsProtocol}//\${window.location.host}/ws/signaling\`);
 
               ws.onopen = () => {
-                ws.send(JSON.stringify({ type: 'AUTH_REQUEST', role: 'android', deviceId: 'browser_mobile_phone' }));
+                ws.send(JSON.stringify({
+                  type: 'AUTH_REQUEST',
+                  role: 'android',
+                  deviceId: deviceId,
+                  deviceInfo: { model: 'Browser Mobile', brand: 'WebStream' }
+                }));
               };
 
               ws.onmessage = async (event) => {
@@ -225,17 +204,17 @@ async function start() {
 
                 if (msg.type === 'AUTH_RESPONSE') {
                   initWebRtc(stream);
-                } else if (msg.type === 'SDP_ANSWER') {
+                } else if (msg.type === 'SDP_ANSWER' && msg.deviceId === deviceId) {
                   if (pc) await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp }));
-                } else if (msg.type === 'ICE_CANDIDATE' && msg.candidate) {
+                } else if (msg.type === 'ICE_CANDIDATE' && msg.deviceId === deviceId && msg.candidate) {
                   if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
                 }
               };
 
             } catch (err) {
               console.error("Browser screen capture error", err);
-              alert("Browser screen capture prompt closed or not supported by this browser: " + err.message);
-              btn.innerText = "⚡ STREAM SCREEN IN BROWSER (NO APP NEEDED)";
+              alert("Browser screen capture prompt closed or not supported: " + err.message);
+              btn.innerText = "STREAM SCREEN TO CONSOLE";
             }
           }
 
@@ -252,14 +231,14 @@ async function start() {
 
             pc.onicecandidate = (e) => {
               if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: e.candidate.toJSON() }));
+                ws.send(JSON.stringify({ type: 'ICE_CANDIDATE', deviceId: deviceId, candidate: e.candidate.toJSON() }));
               }
             };
 
             pc.createOffer().then(offer => {
               pc.setLocalDescription(offer);
-              ws.send(JSON.stringify({ type: 'SDP_OFFER', sdp: offer.sdp, pairingSessionId: 'personal_session' }));
-              document.getElementById('web-stream-btn').innerText = "🟢 STREAMING LIVE TO LAPTOP";
+              ws.send(JSON.stringify({ type: 'SDP_OFFER', deviceId: deviceId, sdp: offer.sdp, pairingSessionId: 'multi_session' }));
+              document.getElementById('web-stream-btn').innerText = "STREAMING LIVE TO CONSOLE";
             });
           }
         </script>
@@ -270,57 +249,19 @@ async function start() {
 
   fastify.post('/api/v1/pairing/create', async (req, reply) => {
     const { deviceInfo } = req.body || {};
-    const dbDeviceId = deviceInfo?.deviceId || 'personal_phone';
-    const pairingSessionId = 'personal_session_' + crypto.randomUUID();
-    const pairingCode = generatePairingCode();
-    const pairingToken = crypto.randomBytes(32).toString('hex');
+    const dbDeviceId = deviceInfo?.deviceId || 'phone_' + crypto.randomUUID().slice(0, 8);
+    const pairingSessionId = 'multi_session_' + crypto.randomUUID();
     const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-
-    store.createPairingSession({
-      pairingSessionId,
-      deviceId: dbDeviceId,
-      pairingToken,
-      pairingCode,
-      expiresAt,
-      status: 'PENDING',
-      deviceInfo
-    });
-
     const androidJwt = jwt.sign({ deviceId: dbDeviceId, role: 'android' }, JWT_SECRET, { expiresIn: '7d' });
 
     return reply.status(201).send({
       success: true,
       data: {
         pairingSessionId,
-        pairingCode,
-        pairingToken,
+        deviceId: dbDeviceId,
         expiresAt: new Date(expiresAt).toISOString(),
         androidJwt,
         deviceInfo
-      }
-    });
-  });
-
-  fastify.post('/api/v1/pairing/claim', async (req, reply) => {
-    const { pairingCode, desktopInfo } = req.body || {};
-    const session = store.getPairingByCodeOrToken(pairingCode) || Array.from(store.pairingSessions.values())[0] || {
-      pairingSessionId: 'personal_session_default',
-      deviceId: 'personal_phone'
-    };
-
-    const desktopJwt = jwt.sign({
-      deviceId: session.deviceId,
-      role: 'desktop',
-      sessionId: session.pairingSessionId
-    }, JWT_SECRET, { expiresIn: '7d' });
-
-    return reply.status(200).send({
-      success: true,
-      data: {
-        pairingSessionId: session.pairingSessionId,
-        desktopJwt,
-        deviceId: session.deviceId,
-        status: 'WAITING_FOR_APPROVAL'
       }
     });
   });
@@ -329,9 +270,7 @@ async function start() {
     const socket = connection?.socket || connection?.raw || connection;
     if (!socket || typeof socket.on !== 'function') return;
 
-    let clientId = null;
-    let role = null;
-    let deviceId = null;
+    let clientMeta = null;
 
     const safeSend = (wsTarget, payload) => {
       try {
@@ -349,53 +288,64 @@ async function start() {
 
         switch (msg.type) {
           case 'AUTH_REQUEST': {
-            role = msg.role || 'desktop';
-            deviceId = msg.deviceId || (role === 'android' ? 'personal_phone' : 'personal_laptop');
-            clientId = `${role}_${deviceId}_${Date.now()}`;
+            const role = msg.role || 'desktop';
+            const deviceId = msg.deviceId || (role === 'android' ? `device_${Date.now()}` : 'desktop_console');
+            const res = store.registerClient(socket, role, deviceId, msg.deviceInfo || {});
 
-            store.registerClient({ id: clientId, role, deviceId, ws: socket });
-            safeSend(socket, { type: 'AUTH_RESPONSE', success: true });
+            clientMeta = store.clients.get(socket);
+
+            safeSend(socket, {
+              type: 'AUTH_RESPONSE',
+              success: res.success,
+              deviceId: res.deviceId,
+              reason: res.reason
+            });
 
             if (role === 'desktop') {
-              const androidWs = store.getLatestAndroid();
-              if (androidWs) {
-                store.linkPeers(socket, androidWs);
-                safeSend(socket, { type: 'PHONE_STATUS', status: 'ONLINE', message: 'Personal phone ready for instant streaming' });
-              }
-            } else if (role === 'android') {
-              const desktopWs = store.getLatestDesktop();
-              if (desktopWs) {
-                store.linkPeers(socket, desktopWs);
-                safeSend(desktopWs, { type: 'PHONE_STATUS', status: 'ONLINE', message: 'Personal phone ready for instant streaming' });
-              }
+              safeSend(socket, {
+                type: 'DEVICE_LIST_UPDATE',
+                devices: store.getAllAndroidDevices(),
+                count: store.androidDevices.size,
+                maxDevices: store.maxDevices
+              });
             }
             break;
           }
 
           case 'AUTO_CONNECT':
           case 'PAIR_REQUEST': {
-            const androidWs = store.getLatestAndroid();
-            if (androidWs) {
-              store.linkPeers(socket, androidWs);
-              safeSend(androidWs, {
-                type: 'PAIR_REQUEST',
-                pairingSessionId: msg.pairingSessionId || 'personal_session',
-                desktopName: msg.desktopName || 'Personal Laptop'
-              });
+            const targetDeviceId = msg.deviceId;
+            if (targetDeviceId) {
+              const dev = store.getAndroidDevice(targetDeviceId);
+              if (dev && dev.socket) {
+                safeSend(dev.socket, {
+                  type: 'PAIR_REQUEST',
+                  deviceId: targetDeviceId,
+                  desktopName: msg.desktopName || 'Laptop Console'
+                });
+              }
             } else {
-              safeSend(socket, { type: 'ERROR', message: 'Smartphone is offline. Open SMR app on phone or tap browser stream.' });
+              // Request stream from all connected devices
+              for (const dev of store.androidDevices.values()) {
+                if (dev.socket && dev.socket.readyState === 1) {
+                  safeSend(dev.socket, {
+                    type: 'PAIR_REQUEST',
+                    deviceId: dev.deviceId,
+                    desktopName: msg.desktopName || 'Laptop Console'
+                  });
+                }
+              }
             }
             break;
           }
 
           case 'PAIR_APPROVAL': {
-            const turnServers = generateTurnCredentials('personal_device');
-            const targetWs = store.getTargetPeer(socket) || store.getLatestDesktop();
-            if (targetWs) {
-              store.linkPeers(socket, targetWs);
-              safeSend(targetWs, {
+            const turnServers = generateTurnCredentials(msg.deviceId || 'device');
+            const devId = msg.deviceId || clientMeta?.deviceId;
+            for (const desktopSocket of store.desktopClients) {
+              safeSend(desktopSocket, {
                 type: 'PAIR_APPROVAL',
-                pairingSessionId: msg.pairingSessionId || 'personal_session',
+                deviceId: devId,
                 approved: true,
                 turnServers
               });
@@ -403,17 +353,64 @@ async function start() {
             break;
           }
 
-          case 'SDP_OFFER':
-          case 'SDP_ANSWER':
-          case 'ICE_CANDIDATE':
-          case 'REMOTE_INPUT': {
-            let targetWs = store.getTargetPeer(socket);
-            if (!targetWs || targetWs.readyState !== 1) {
-              targetWs = role === 'android' ? store.getLatestDesktop() : store.getLatestAndroid();
-              if (targetWs) store.linkPeers(socket, targetWs);
+          case 'SDP_OFFER': {
+            const devId = msg.deviceId || clientMeta?.deviceId;
+            for (const desktopSocket of store.desktopClients) {
+              safeSend(desktopSocket, {
+                type: 'SDP_OFFER',
+                deviceId: devId,
+                sdp: msg.sdp,
+                deviceInfo: clientMeta?.deviceInfo
+              });
             }
-            if (targetWs) {
-              safeSend(targetWs, msg);
+            break;
+          }
+
+          case 'SDP_ANSWER': {
+            const devId = msg.deviceId;
+            const dev = store.getAndroidDevice(devId);
+            if (dev && dev.socket) {
+              safeSend(dev.socket, {
+                type: 'SDP_ANSWER',
+                deviceId: devId,
+                sdp: msg.sdp
+              });
+            }
+            break;
+          }
+
+          case 'ICE_CANDIDATE': {
+            const devId = msg.deviceId || clientMeta?.deviceId;
+            if (clientMeta?.role === 'android') {
+              for (const desktopSocket of store.desktopClients) {
+                safeSend(desktopSocket, {
+                  type: 'ICE_CANDIDATE',
+                  deviceId: devId,
+                  candidate: msg.candidate
+                });
+              }
+            } else if (clientMeta?.role === 'desktop') {
+              const dev = store.getAndroidDevice(devId);
+              if (dev && dev.socket) {
+                safeSend(dev.socket, {
+                  type: 'ICE_CANDIDATE',
+                  deviceId: devId,
+                  candidate: msg.candidate
+                });
+              }
+            }
+            break;
+          }
+
+          case 'REMOTE_INPUT': {
+            const devId = msg.deviceId;
+            const dev = store.getAndroidDevice(devId);
+            if (dev && dev.socket) {
+              safeSend(dev.socket, {
+                type: 'REMOTE_INPUT',
+                deviceId: devId,
+                payload: msg.payload
+              });
             }
             break;
           }
@@ -429,12 +426,12 @@ async function start() {
     });
 
     socket.on('close', () => {
-      if (clientId) store.unregisterClient(clientId);
+      store.unregisterClient(socket);
     });
   });
 
   await fastify.listen({ port: PORT, host: HOST });
-  console.log(`[Backend] Personal WebRTC Gateway running on http://${HOST}:${PORT}`);
+  console.log(`[Backend] Multi-Device Gateway running on http://${HOST}:${PORT}`);
 }
 
 start();

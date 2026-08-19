@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Display Console — Remote Display & Touch Controller</title>
+  <title>Display Console — Multi-Device Remote Matrix (Max 8 Devices)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -35,27 +35,32 @@
       box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
     }
 
-    .display-frame {
+    .device-card {
       position: relative;
-      padding: 8px;
       background: #020617;
-      border-radius: 32px;
+      border-radius: 20px;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 20px rgba(56, 189, 248, 0.1);
-      transition: all 0.3s ease;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    
+    .device-card:hover {
+      border-color: rgba(56, 189, 248, 0.4);
+      box-shadow: 0 0 25px rgba(56, 189, 248, 0.15);
+    }
+
     .video-canvas {
-      max-width: 100%;
-      height: auto;
-      max-height: 82vh;
-      border-radius: 24px;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
       cursor: crosshair;
-      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
+      background: #000;
     }
     
     .ctrl-btn {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.08);
       color: #94a3b8;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -64,7 +69,6 @@
       background: rgba(56, 189, 248, 0.12);
       border-color: rgba(56, 189, 248, 0.4);
       color: #38bdf8;
-      transform: translateY(-1px);
     }
   </style>
 </head>
@@ -75,29 +79,15 @@
     <div class="flex items-center space-x-4">
       <div class="flex items-center space-x-2.5 bg-slate-900/80 border border-slate-800 px-3.5 py-1.5 rounded-xl">
         <span id="status-pill" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span id="status-text" class="font-orbitron font-semibold text-xs tracking-wider text-slate-300">DISPLAY CONSOLE // READY</span>
+        <span id="status-text" class="font-orbitron font-semibold text-xs tracking-wider text-slate-300">MULTI-DEVICE CONSOLE // READY</span>
       </div>
-    </div>
 
-    <!-- Android Hardware Navigation Controls -->
-    <div id="android-controls" class="hidden items-center bg-slate-900/90 border border-slate-800 rounded-xl p-1.5 space-x-1 shadow-lg">
-      <button onclick="sendGlobalAction('BACK')" class="ctrl-btn px-3 py-1.5 rounded-lg text-xs font-mono-code flex items-center space-x-1" title="Back Button">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-        <span>BACK</span>
-      </button>
-      <button onclick="sendGlobalAction('HOME')" class="ctrl-btn px-3 py-1.5 rounded-lg text-xs font-mono-code flex items-center space-x-1" title="Home Button">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-        <span>HOME</span>
-      </button>
-      <button onclick="sendGlobalAction('RECENTS')" class="ctrl-btn px-3 py-1.5 rounded-lg text-xs font-mono-code flex items-center space-x-1" title="Overview">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-        <span>APPS</span>
-      </button>
-      <div class="h-4 w-px bg-slate-800 mx-1"></div>
-      <button onclick="sendGlobalAction('NOTIFICATIONS')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Notifications">SHADE</button>
-      <button onclick="sendGlobalAction('QUICK_SETTINGS')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Settings">SYSTEM</button>
-      <button onclick="sendGlobalAction('LOCK_SCREEN')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Lock Screen">LOCK</button>
-      <button onclick="sendGlobalAction('TAKE_SCREENSHOT')" class="ctrl-btn px-2.5 py-1.5 rounded-lg text-xs font-mono-code" title="Screenshot">CAPTURE</button>
+      <div class="h-4 w-px bg-slate-800"></div>
+
+      <div class="flex items-center space-x-2 bg-sky-950/40 border border-sky-500/30 px-3 py-1 rounded-lg text-xs font-mono-code text-sky-400">
+        <span>ACTIVE DEVICES:</span>
+        <strong id="device-count-badge" class="text-white">0 / 8</strong>
+      </div>
     </div>
 
     <!-- Action Bar -->
@@ -111,23 +101,23 @@
         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
       </button>
 
-      <button onclick="instantAutoConnect()" class="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-sky-500/20 transition transform hover:scale-105 font-orbitron">
-        INSTANT CONNECT
+      <button onclick="instantAutoConnectAll()" class="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-sky-500/20 transition transform hover:scale-105 font-orbitron">
+        CONNECT ALL DEVICES
       </button>
     </div>
   </header>
 
-  <!-- Main Display Container -->
-  <main class="flex-1 relative flex items-center justify-center p-4 overflow-hidden">
+  <!-- Main Multi-Device Grid Viewport -->
+  <main class="flex-1 relative p-4 overflow-hidden flex items-center justify-center">
 
-    <!-- Setup Card -->
+    <!-- Idle Waiting Card -->
     <div id="idle-card" class="flex flex-col items-center justify-center text-center max-w-md glass-panel p-8 rounded-3xl z-10 border border-slate-800">
       <div class="w-14 h-14 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mb-5 text-sky-400">
-        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
       </div>
-      <h2 class="text-xl font-bold font-orbitron text-slate-100 mb-2">REMOTE DISPLAY CONSOLE</h2>
+      <h2 class="text-xl font-bold font-orbitron text-slate-100 mb-2">MULTI-DEVICE MATRIX CONSOLE</h2>
       <p class="text-xs text-slate-400 font-mono-code leading-relaxed mb-6">
-        High-performance WebRTC display mirror and remote touch controller.
+        Stream and remote control up to 8 mobile devices simultaneously in real time.
       </p>
 
       <div class="w-full mb-5 p-3 bg-slate-950/80 rounded-xl border border-slate-800 text-left text-xs font-mono-code flex items-center justify-between text-slate-400">
@@ -135,8 +125,8 @@
         <button onclick="openServerConfigModal()" class="text-sky-400 hover:underline text-xs ml-2">CONFIG</button>
       </div>
 
-      <button onclick="instantAutoConnect()" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-orbitron font-bold rounded-2xl text-xs shadow-lg shadow-sky-500/20 transition transform hover:scale-[1.02]">
-        CONNECT DISPLAY
+      <button onclick="instantAutoConnectAll()" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-orbitron font-bold rounded-2xl text-xs shadow-lg shadow-sky-500/20 transition transform hover:scale-[1.02]">
+        CONNECT ALL DEVICES (MAX 8)
       </button>
 
       <button onclick="openMagicLinkModal()" class="w-full mt-2.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 font-mono-code rounded-xl text-xs transition">
@@ -144,20 +134,9 @@
       </button>
     </div>
 
-    <!-- Active Video Stream Frame -->
-    <div id="stream-container" class="hidden relative flex flex-col items-center justify-center">
-      <div class="display-frame">
-        <video id="remote-video" autoplay playsinline class="video-canvas"></video>
-      </div>
-
-      <!-- Floating Gesture Touch Pad -->
-      <div id="gesture-pad" class="mt-3 flex items-center justify-center space-x-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-full shadow-lg">
-        <span class="text-[11px] text-slate-400 font-mono-code mr-1">SWIPE:</span>
-        <button onclick="sendSwipe('UP')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">UP</button>
-        <button onclick="sendSwipe('DOWN')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">DOWN</button>
-        <button onclick="sendSwipe('LEFT')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">LEFT</button>
-        <button onclick="sendSwipe('RIGHT')" class="ctrl-btn px-2.5 py-1 rounded text-[11px] font-mono-code">RIGHT</button>
-      </div>
+    <!-- Dynamic 8-Device Matrix Grid Container -->
+    <div id="grid-container" class="hidden w-full h-full grid gap-4 items-center justify-center p-2">
+      <!-- Device Cards render here dynamically (Up to 8 slots) -->
     </div>
 
     <!-- Telemetry HUD Overlay -->
@@ -167,10 +146,9 @@
         <button onclick="toggleDiagnostics()" class="text-slate-400 hover:text-white font-bold">×</button>
       </div>
       <div class="space-y-2">
-        <div class="flex justify-between"><span class="text-slate-400">Latency (RTT):</span><span id="hud-rtt" class="text-sky-400 font-semibold">12 ms</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">FPS Rate:</span><span id="hud-fps" class="text-emerald-400">60 FPS</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Encryption:</span><span id="hud-transport" class="text-slate-300">WebRTC DTLS-SRTP</span></div>
-        <div class="flex justify-between"><span class="text-slate-400">Input DataChannel:</span><span id="hud-dc" class="text-emerald-400">ACTIVE</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Max Device Slots:</span><span class="text-sky-400 font-semibold">8 Devices</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Connected Streams:</span><span id="hud-stream-count" class="text-emerald-400 font-bold">0</span></div>
+        <div class="flex justify-between"><span class="text-slate-400">Protocol:</span><span class="text-slate-300">WebRTC P2P (Unified Plan)</span></div>
       </div>
     </div>
   </main>
@@ -179,7 +157,7 @@
   <div id="magic-modal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-50 p-4">
     <div class="glass-panel rounded-3xl p-8 w-full max-w-md text-center border border-slate-800">
       <h3 class="text-lg font-bold font-orbitron text-slate-100 mb-1">MOBILE CONNECT LINK</h3>
-      <p class="text-xs text-slate-400 mb-5 font-mono-code">Open this URL on your mobile phone to connect instantly.</p>
+      <p class="text-xs text-slate-400 mb-5 font-mono-code">Open this URL on any mobile phone to connect it to this console (Up to 8 devices).</p>
       
       <div class="w-full p-3.5 bg-slate-950 border border-slate-800 rounded-2xl text-xs font-mono-code text-sky-400 break-all mb-5">
         <span id="magic-link-text">https://smr-kzjz.onrender.com/connect</span>
@@ -212,15 +190,11 @@
 
   <script>
     let activeServerUrl = localStorage.getItem('smr_server_url') || 'https://smr-kzjz.onrender.com';
-    let pc = null;
     let ws = null;
-    let dataChannel = null;
-    let mediaStream = new MediaStream();
-    let pendingIceCandidates = [];
     
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
+    // Map of deviceId -> { pc, dataChannel, mediaStream, element, iceCandidates }
+    const deviceConnections = new Map();
+    const MAX_DEVICES = 8;
 
     updateServerDisplay();
     initAutoWebSocket();
@@ -265,36 +239,21 @@
 
         ws.onopen = () => {
           document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
-          document.getElementById('status-text').innerText = 'DISPLAY CONSOLE // READY';
-          ws.send(JSON.stringify({ type: 'AUTH_REQUEST', role: 'desktop', deviceId: 'personal_laptop' }));
+          document.getElementById('status-text').innerText = 'MULTI-DEVICE CONSOLE // READY';
+          ws.send(JSON.stringify({ type: 'AUTH_REQUEST', role: 'desktop', deviceId: 'desktop_console' }));
         };
 
         ws.onmessage = async (event) => {
           const msg = JSON.parse(event.data);
 
-          if (msg.type === 'PHONE_STATUS') {
-            document.getElementById('status-text').innerText = 'MOBILE DEVICE ONLINE';
-          } else if (msg.type === 'PAIR_APPROVAL') {
-            document.getElementById('status-text').innerText = 'ESTABLISHING WEBRTC STREAM...';
-            initWebRtc(msg.turnServers || []);
-          } else if (msg.type === 'SDP_OFFER') {
-            if (pc) {
-              await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: msg.sdp }));
-              while (pendingIceCandidates.length > 0) {
-                const cand = pendingIceCandidates.shift();
-                await pc.addIceCandidate(cand);
-              }
-              const answer = await pc.createAnswer();
-              await pc.setLocalDescription(answer);
-              ws.send(JSON.stringify({ type: 'SDP_ANSWER', sdp: answer.sdp }));
-            }
-          } else if (msg.type === 'ICE_CANDIDATE' && msg.candidate) {
-            const cand = new RTCIceCandidate(msg.candidate);
-            if (pc && pc.remoteDescription) {
-              await pc.addIceCandidate(cand);
-            } else {
-              pendingIceCandidates.push(cand);
-            }
+          if (msg.type === 'DEVICE_LIST_UPDATE') {
+            updateDeviceCountBadge(msg.count);
+          } else if (msg.type === 'PAIR_APPROVAL' && msg.deviceId) {
+            initDevicePeerConnection(msg.deviceId, msg.turnServers || []);
+          } else if (msg.type === 'SDP_OFFER' && msg.deviceId) {
+            handleSdpOffer(msg.deviceId, msg.sdp);
+          } else if (msg.type === 'ICE_CANDIDATE' && msg.deviceId && msg.candidate) {
+            handleIceCandidate(msg.deviceId, msg.candidate);
           }
         };
 
@@ -306,124 +265,230 @@
       }
     }
 
-    function instantAutoConnect() {
-      document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse';
-      document.getElementById('status-text').innerText = 'REQUESTING STREAM...';
+    function updateDeviceCountBadge(count) {
+      document.getElementById('device-count-badge').innerText = `${count} / ${MAX_DEVICES}`;
+      document.getElementById('hud-stream-count').innerText = deviceConnections.size;
+    }
 
+    function instantAutoConnectAll() {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         initAutoWebSocket();
-        setTimeout(instantAutoConnect, 1000);
+        setTimeout(instantAutoConnectAll, 1000);
         return;
       }
-
       ws.send(JSON.stringify({ type: 'AUTO_CONNECT', desktopName: 'Laptop Console' }));
     }
 
-    function initWebRtc(turnServers) {
+    function updateGridStyle() {
+      const count = deviceConnections.size;
+      const grid = document.getElementById('grid-container');
+      
+      if (count === 0) {
+        document.getElementById('idle-card').classList.remove('hidden');
+        grid.classList.add('hidden');
+        return;
+      }
+
+      document.getElementById('idle-card').classList.add('hidden');
+      grid.classList.remove('hidden');
+
+      if (count === 1) {
+        grid.className = "w-full h-full grid grid-cols-1 items-center justify-center p-2";
+      } else if (count === 2) {
+        grid.className = "w-full h-full grid grid-cols-2 gap-4 items-center justify-center p-2";
+      } else if (count <= 4) {
+        grid.className = "w-full h-full grid grid-cols-2 grid-rows-2 gap-4 items-center justify-center p-2";
+      } else {
+        grid.className = "w-full h-full grid grid-cols-4 grid-rows-2 gap-3 items-center justify-center p-2";
+      }
+    }
+
+    function initDevicePeerConnection(deviceId, turnServers) {
+      if (deviceConnections.has(deviceId)) {
+        const old = deviceConnections.get(deviceId);
+        try { old.pc.close(); } catch(e){}
+        deviceConnections.delete(deviceId);
+      }
+
+      if (deviceConnections.size >= MAX_DEVICES) return;
+
       const iceServers = turnServers.length > 0 ? turnServers : [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'stun:global.stun.twilio.com:3478' }
       ];
-      pc = new RTCPeerConnection({ iceServers });
+
+      const pc = new RTCPeerConnection({ iceServers });
+      const mediaStream = new MediaStream();
+      const iceCandidatesQueue = [];
+
+      const devObj = {
+        deviceId,
+        pc,
+        dataChannel: null,
+        mediaStream,
+        iceCandidatesQueue,
+        cardElement: null,
+        videoElement: null
+      };
+
+      deviceConnections.set(deviceId, devObj);
+
+      createDeviceCard(devObj);
+      updateGridStyle();
+      updateDeviceCountBadge(deviceConnections.size);
 
       pc.ontrack = (event) => {
         mediaStream.addTrack(event.track);
-        const video = document.getElementById('remote-video');
-        video.srcObject = mediaStream;
-
-        document.getElementById('idle-card').classList.add('hidden');
-        document.getElementById('stream-container').classList.remove('hidden');
-        document.getElementById('android-controls').classList.remove('hidden');
-        document.getElementById('android-controls').classList.add('flex');
-        document.getElementById('status-pill').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
-        document.getElementById('status-text').innerText = 'DISPLAY ACTIVE // LIVE';
+        if (devObj.videoElement) {
+          devObj.videoElement.srcObject = mediaStream;
+        }
       };
 
       pc.ondatachannel = (event) => {
-        dataChannel = event.channel;
-        document.getElementById('hud-dc').innerText = 'ACTIVE';
+        devObj.dataChannel = event.channel;
       };
 
       pc.onicecandidate = (event) => {
         if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'ICE_CANDIDATE', candidate: event.candidate.toJSON() }));
+          ws.send(JSON.stringify({ type: 'ICE_CANDIDATE', deviceId, candidate: event.candidate.toJSON() }));
         }
       };
+    }
 
-      const videoEl = document.getElementById('remote-video');
+    async function handleSdpOffer(deviceId, sdpOffer) {
+      if (!deviceConnections.has(deviceId)) {
+        initDevicePeerConnection(deviceId, []);
+      }
+      const devObj = deviceConnections.get(deviceId);
+      if (!devObj) return;
+
+      await devObj.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: sdpOffer }));
       
+      while (devObj.iceCandidatesQueue.length > 0) {
+        const cand = devObj.iceCandidatesQueue.shift();
+        await devObj.pc.addIceCandidate(cand);
+      }
+
+      const answer = await devObj.pc.createAnswer();
+      await devObj.pc.setLocalDescription(answer);
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'SDP_ANSWER', deviceId, sdp: answer.sdp }));
+      }
+    }
+
+    async function handleIceCandidate(deviceId, candidateJson) {
+      const cand = new RTCIceCandidate(candidateJson);
+      const devObj = deviceConnections.get(deviceId);
+      if (devObj) {
+        if (devObj.pc && devObj.pc.remoteDescription) {
+          await devObj.pc.addIceCandidate(cand);
+        } else {
+          devObj.iceCandidatesQueue.push(cand);
+        }
+      }
+    }
+
+    function createDeviceCard(devObj) {
+      const grid = document.getElementById('grid-container');
+      
+      const card = document.createElement('div');
+      card.className = "device-card h-full w-full relative";
+      card.id = `card_${devObj.deviceId}`;
+
+      card.innerHTML = `
+        <div class="h-9 bg-slate-900/90 border-b border-slate-800 px-3 flex items-center justify-between text-xs font-mono-code">
+          <div class="flex items-center space-x-2 truncate">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <strong class="text-slate-200 truncate">${devObj.deviceId}</strong>
+          </div>
+          <div class="flex items-center space-x-1">
+            <button onclick="sendDeviceGlobalAction('${devObj.deviceId}', 'BACK')" class="ctrl-btn px-1.5 py-0.5 rounded text-[10px]" title="Back">◀</button>
+            <button onclick="sendDeviceGlobalAction('${devObj.deviceId}', 'HOME')" class="ctrl-btn px-1.5 py-0.5 rounded text-[10px]" title="Home">⌂</button>
+            <button onclick="sendDeviceGlobalAction('${devObj.deviceId}', 'RECENTS')" class="ctrl-btn px-1.5 py-0.5 rounded text-[10px]" title="Apps">▢</button>
+            <button onclick="removeDevice('${devObj.deviceId}')" class="text-slate-400 hover:text-rose-400 ml-1 font-bold">×</button>
+          </div>
+        </div>
+        <div class="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
+          <video id="video_${devObj.deviceId}" autoplay playsinline class="video-canvas"></video>
+        </div>
+      `;
+
+      grid.appendChild(card);
+
+      const videoEl = card.querySelector(`#video_${devObj.deviceId}`);
+      devObj.cardElement = card;
+      devObj.videoElement = videoEl;
+
+      setupTouchInteraction(devObj, videoEl);
+    }
+
+    function setupTouchInteraction(devObj, videoEl) {
+      let startX = 0, startY = 0, startTime = 0;
+
       videoEl.onmousedown = (e) => {
         const rect = videoEl.getBoundingClientRect();
-        touchStartX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        touchStartY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        touchStartTime = Date.now();
+        startX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        startY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+        startTime = Date.now();
       };
 
       videoEl.onmouseup = (e) => {
         const rect = videoEl.getBoundingClientRect();
         const endX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
         const endY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-        const duration = Date.now() - touchStartTime;
+        const duration = Date.now() - startTime;
 
-        const deltaX = endX - touchStartX;
-        const deltaY = endY - touchStartY;
+        const deltaX = endX - startX;
+        const deltaY = endY - startY;
         const distSq = deltaX * deltaX + deltaY * deltaY;
 
         if (distSq > 0.002) {
-          sendInputPayload({
+          sendDeviceInput(devObj.deviceId, {
             action: 'SWIPE',
-            startX: touchStartX,
-            startY: touchStartY,
-            endX: endX,
-            endY: endY,
+            startX, startY, endX, endY,
             duration: Math.max(150, duration)
           });
         } else if (duration > 500) {
-          sendInputPayload({
+          sendDeviceInput(devObj.deviceId, {
             action: 'LONG_PRESS',
-            normalizedX: touchStartX,
-            normalizedY: touchStartY
+            normalizedX: startX,
+            normalizedY: startY
           });
         } else {
-          sendInputPayload({
+          sendDeviceInput(devObj.deviceId, {
             action: 'TAP',
-            normalizedX: touchStartX,
-            normalizedY: touchStartY
+            normalizedX: startX,
+            normalizedY: startY
           });
         }
       };
     }
 
-    function sendSwipe(direction) {
-      let startX = 0.5, startY = 0.5, endX = 0.5, endY = 0.5;
-      if (direction === 'UP') { startY = 0.8; endY = 0.2; }
-      else if (direction === 'DOWN') { startY = 0.2; endY = 0.8; }
-      else if (direction === 'LEFT') { startX = 0.8; endX = 0.2; }
-      else if (direction === 'RIGHT') { startX = 0.2; endX = 0.8; }
-
-      sendInputPayload({
-        action: 'SWIPE',
-        startX: startX,
-        startY: startY,
-        endX: endX,
-        endY: endY,
-        duration: 300
-      });
+    function sendDeviceGlobalAction(deviceId, action) {
+      sendDeviceInput(deviceId, { action: 'GLOBAL_ACTION', globalAction: action });
     }
 
-    function sendGlobalAction(action) {
-      sendInputPayload({ action: 'GLOBAL_ACTION', globalAction: action });
-    }
-
-    function sendInputPayload(payload) {
+    function sendDeviceInput(deviceId, payload) {
       payload.timestamp = Date.now();
-      const jsonStr = JSON.stringify(payload);
+      const devObj = deviceConnections.get(deviceId);
 
-      if (dataChannel && dataChannel.readyState === 'open') {
-        dataChannel.send(jsonStr);
+      if (devObj && devObj.dataChannel && devObj.dataChannel.readyState === 'open') {
+        devObj.dataChannel.send(JSON.stringify(payload));
       } else if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'REMOTE_INPUT', payload: payload }));
+        ws.send(JSON.stringify({ type: 'REMOTE_INPUT', deviceId, payload }));
+      }
+    }
+
+    function removeDevice(deviceId) {
+      if (deviceConnections.has(deviceId)) {
+        const devObj = deviceConnections.get(deviceId);
+        try { devObj.pc.close(); } catch(e){}
+        if (devObj.cardElement) devObj.cardElement.remove();
+        deviceConnections.delete(deviceId);
+        updateGridStyle();
+        updateDeviceCountBadge(deviceConnections.size);
       }
     }
   </script>
