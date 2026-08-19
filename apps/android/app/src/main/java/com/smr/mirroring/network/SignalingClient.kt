@@ -12,18 +12,23 @@ class SignalingClient(private val serverUrl: String) {
     var onConnected: (() -> Unit)? = null
     var onDisconnected: (() -> Unit)? = null
 
-    fun connect(jwtToken: String) {
+    fun connect(jwtToken: String, deviceId: String) {
         val request = Request.Builder()
             .url(serverUrl)
             .build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.i(TAG, "Signaling WebSocket connected. Sending AUTH_REQUEST.")
+                Log.i(TAG, "Signaling WebSocket connected. Sending AUTH_REQUEST for $deviceId.")
                 val authMsg = JSONObject().apply {
                     put("type", "AUTH_REQUEST")
                     put("token", jwtToken)
                     put("role", "android")
+                    put("deviceId", deviceId)
+                    put("deviceInfo", JSONObject().apply {
+                        put("brand", android.os.Build.BRAND)
+                        put("model", android.os.Build.MODEL)
+                    })
                 }
                 webSocket.send(authMsg.toString())
                 onConnected?.invoke()

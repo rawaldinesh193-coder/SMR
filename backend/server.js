@@ -17,7 +17,7 @@ const TURN_SECRET = process.env.TURN_SHARED_SECRET || 'coturn_shared_secret_key_
 const STUN_URL = process.env.STUN_SERVER_URL || 'stun:stun.l.google.com:19302';
 const TURN_URL = process.env.TURN_SERVER_URL || 'turn:localhost:3478';
 
-// Multi-Device In-Memory Session Store (Supports up to 8 concurrent streams)
+// Multi-Device In-Memory Session Store (Strict Device Deduplication)
 class MultiDeviceStore {
   constructor() {
     this.clients = new Map(); // socket -> client metadata
@@ -27,10 +27,12 @@ class MultiDeviceStore {
   }
 
   registerClient(socket, role, deviceId, deviceInfo = {}) {
+    const cleanDeviceId = deviceId || (role === 'android' ? `device_${Date.now()}` : 'desktop_console');
+
     const client = {
       socket,
       role,
-      deviceId: deviceId || (role === 'android' ? `device_${Date.now()}` : 'desktop_console'),
+      deviceId: cleanDeviceId,
       deviceInfo,
       registeredAt: Date.now()
     };
@@ -40,14 +42,17 @@ class MultiDeviceStore {
     if (role === 'desktop') {
       this.desktopClients.add(socket);
     } else if (role === 'android') {
-      if (this.androidDevices.size >= this.maxDevices && !this.androidDevices.has(client.deviceId)) {
-        return { success: false, reason: 'Max 8 devices limit reached' };
+      if (this.androidDevices.has(cleanDeviceId)) {
+        const oldDev = this.androidDevices.get(cleanDeviceId);
+        if (oldDev && oldDev.socket && oldDev.socket !== socket) {
+          this.clients.delete(oldDev.socket);
+        }
       }
-      this.androidDevices.set(client.deviceId, client);
+      this.androidDevices.set(cleanDeviceId, client);
     }
 
     this.broadcastDeviceList();
-    return { success: true, deviceId: client.deviceId };
+    return { success: true, deviceId: cleanDeviceId };
   }
 
   unregisterClient(socket) {
@@ -56,7 +61,10 @@ class MultiDeviceStore {
       if (client.role === 'desktop') {
         this.desktopClients.delete(socket);
       } else if (client.role === 'android') {
-        this.androidDevices.delete(client.deviceId);
+        const registeredDev = this.androidDevices.get(client.deviceId);
+        if (registeredDev && registeredDev.socket === socket) {
+          this.androidDevices.delete(client.deviceId);
+        }
       }
       this.clients.delete(socket);
       this.broadcastDeviceList();
@@ -120,7 +128,7 @@ async function start() {
   fastify.get('/', async () => ({
     status: 'online',
     service: 'SMR Multi-Device WebRTC Signaling Gateway (8 Devices)',
-    version: '3.0.0',
+    version: '3.1.0',
     mode: 'multi_device_matrix_streaming',
     maxConcurrentDevices: 8,
     websocketSignaling: '/ws/signaling',
@@ -136,7 +144,6 @@ async function start() {
     timestamp: new Date().toISOString()
   }));
 
-  // Hybrid Web Screen Streamer Landing Page
   fastify.get('/connect', async (req, reply) => {
     reply.type('text/html').send(`
       <!DOCTYPE html>
@@ -325,7 +332,6 @@ async function start() {
                 });
               }
             } else {
-              // Request stream from all connected devices
               for (const dev of store.androidDevices.values()) {
                 if (dev.socket && dev.socket.readyState === 1) {
                   safeSend(dev.socket, {

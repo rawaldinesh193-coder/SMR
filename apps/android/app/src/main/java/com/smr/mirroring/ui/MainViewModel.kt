@@ -50,6 +50,7 @@ class MainViewModel : ViewModel() {
 
     private var signalingClient: SignalingClient? = null
     private var webRtcMediaManager: WebRtcMediaManager? = null
+    private var persistentDeviceId: String = ""
 
     init {
         checkPermissions()
@@ -61,11 +62,13 @@ class MainViewModel : ViewModel() {
     }
 
     private fun getUniqueDeviceId(context: Context): String {
+        if (persistentDeviceId.isNotEmpty()) return persistentDeviceId
         val androidId = try {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
         } catch (e: Exception) { "" }
         val modelClean = android.os.Build.MODEL.replace(Regex("[^a-zA-Z0-9]"), "_")
-        return "phone_${modelClean}_${androidId.takeLast(6)}"
+        persistentDeviceId = "phone_${modelClean}_${androidId.takeLast(6)}"
+        return persistentDeviceId
     }
 
     fun autoStartPersonalSession(context: Context) {
@@ -163,7 +166,7 @@ class MainViewModel : ViewModel() {
                     }
                 }
             }
-            connect(jwtToken)
+            connect(jwtToken, deviceId)
         }
     }
 
@@ -223,7 +226,7 @@ class MainViewModel : ViewModel() {
                 PeerConnection.IceServer.builder("stun:global.stun.twilio.com:3478").createIceServer()
             )
 
-            val currentDevId = _uiState.value.deviceId.ifEmpty { getUniqueDeviceId(context) }
+            val currentDevId = getUniqueDeviceId(context)
 
             val sessionStarted = webRtcMediaManager?.startWebRtcSessionWithIntent(
                 projectionData = data,
